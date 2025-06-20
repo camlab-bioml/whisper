@@ -27,10 +27,10 @@ import pandas as pd
 
 # Step 1: Load data and run feature engineering
 df = pd.read_csv("your_input_file.csv")
-features_df = run_feature_engineering(df, control_keywords=["EGFP", "Empty"])
+features_df = feature_engineering(df, control_keywords=["EGFP", "Empty"])
 
 # Step 2: Train model and estimate FDR
-results_df = run_training_and_fdr(features_df, initial_positives=10, initial_negatives=200)
+results_df = run_training_and_score(features_df, initial_positives=10, initial_negatives=200)
 
 # Save output
 results_df.to_csv("puppi_results.csv", index=False)
