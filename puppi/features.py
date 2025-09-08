@@ -39,7 +39,7 @@ def feature_engineering(intensity_df: pd.DataFrame, controls) -> pd.DataFrame:
 
     # === Precompute global CVs for all proteins ===
     global_cv_dict = {}
-    for _, row in intensity_df.iterrows():
+    for idx, row in intensity_df.iterrows():
         prey = row['Protein']
         all_vals = row[intensity_columns].astype(float).values
         mean_all = np.mean(all_vals)
@@ -52,9 +52,6 @@ def feature_engineering(intensity_df: pd.DataFrame, controls) -> pd.DataFrame:
 
     for bait in baits:
         bait_columns = [col for col in intensity_df.columns if re.fullmatch(fr'{bait}_\d+', col)]
-        if not bait_columns:
-            continue
-
         filtered_df = intensity_df[~intensity_df['Protein'].isin([bait, 'birA'])]
 
         # Precompute control stats
@@ -70,10 +67,10 @@ def feature_engineering(intensity_df: pd.DataFrame, controls) -> pd.DataFrame:
 
         features = []
 
-        for _, row in filtered_df.iterrows():
+        for index, row in filtered_df.iterrows():
             prey = row['Protein']
-            bait_intensities = row[bait_columns].astype(float).values
-            control_intensities = row[control_columns].astype(float).values
+            bait_intensities = row[bait_columns].values
+            control_intensities = row[control_columns].values
 
             mean_baits = np.mean(bait_intensities)
             median_baits = np.median(bait_intensities)
@@ -87,7 +84,7 @@ def feature_engineering(intensity_df: pd.DataFrame, controls) -> pd.DataFrame:
 
             replicate_fold_change_sd = np.std(bait_intensities / mean_controls)
             bait_cv = sd_baits / mean_baits if mean_baits != 0 else 0
-            # replicate_stability computed in your script but NOT included in output columns
+            replicate_stability = 1 / (1 + bait_cv)
             bait_control_sd_ratio = sd_baits / sd_controls
             zero_count_baits = np.sum(bait_intensities == 0)
             fold_change = mean_baits / mean_controls
@@ -100,7 +97,7 @@ def feature_engineering(intensity_df: pd.DataFrame, controls) -> pd.DataFrame:
             median_diff = median_baits - np.median(control_intensities)
             zero_or_neg_fc = 0 if penalized_log_fold_change <= 0 else 1
 
-            # ▶ per-bait replicate support flags (exactly as in your script)
+            # ▶ NEW: per-bait replicate support flags
             nonzero_reps = int(np.sum(bait_intensities > 0))
             reps_above_ctrl_med = int(np.sum(bait_intensities > np.median(control_intensities)))
             single_rep_flag = 1 if nonzero_reps == 1 else 0  # 1 = only one replicate has signal
@@ -123,7 +120,7 @@ def feature_engineering(intensity_df: pd.DataFrame, controls) -> pd.DataFrame:
 
         bait_features_df = pd.DataFrame(features)
 
-        # ▶ explicitly choose columns to scale (exclude flags), exactly as in your script
+        # ▶ CHANGE: explicitly choose columns to scale (exclude flags)
         scale_cols = [
             'log_fold_change', 'snr', 'mean_diff', 'median_diff',
             'replicate_fold_change_sd', 'bait_cv', 'bait_control_sd_ratio',
@@ -136,7 +133,7 @@ def feature_engineering(intensity_df: pd.DataFrame, controls) -> pd.DataFrame:
         )
 
         # Composite from the four key (scaled) signals
-        bait_features_df['composite_score'] = scaled_df[['log_fold_change', 'snr', 'mean_diff', 'median_diff']].mean(axis=1)
+        bait_features_df['composite_score'] = scaled_df[['log_fold_change','snr','mean_diff','median_diff']].mean(axis=1)
 
         # Add global CV
         bait_features_df['global_cv'] = bait_features_df['Prey'].map(global_cv_dict)
