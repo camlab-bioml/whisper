@@ -12,11 +12,9 @@ warnings.filterwarnings('ignore')
 
 def train_and_score(
     df_real: pd.DataFrame,
-    *,
-    average_top_count: int = 15,   # fixed cap per your script
-    n_negatives_per_bait: int = 200,
-    save_path: str | None = None,  # optional: if provided, save CSV like your script does
-    verbose: bool = False
+    initial_positives: int = 15,   
+    initial_negatives: int = 200,
+
 ) -> pd.DataFrame:
     """
     Train Bagging(RandomForest) using your PU labeling scheme and compute global decoy FDR.
@@ -94,9 +92,9 @@ def train_and_score(
         all_counts.append(count_above)
 
     # keep your original cap at 15
-    average_top_count = 15
+    initial_positives = 15
 
-    bait_scaled_positives = {bait: (average_top_count if bait in strong_baits else 0)
+    bait_scaled_positives = {bait: (initial_positives if bait in strong_baits else 0)
                             for bait in baits}
 
     print("\nAssigned positives:")
@@ -105,7 +103,7 @@ def train_and_score(
 
     # Label positives & negatives
     y_train_labels = pd.Series(0, index=df_real.index)
-    N_negatives = 200
+    initial_negatives = 200
 
 
 
@@ -126,7 +124,7 @@ def train_and_score(
 
             # Pick negatives from the bottom, excluding chosen positives
             remaining = bait_df.drop(index=top_positives, errors='ignore')
-            bottom_negatives = remaining['composite_score'].nsmallest(N_negatives).index
+            bottom_negatives = remaining['composite_score'].nsmallest(initial_negatives).index
             y_train_labels.loc[bottom_negatives] = -1
 
     labeled_indices = y_train_labels[y_train_labels != 0].index
