@@ -143,7 +143,8 @@ def train_and_score(
 
     # --- Background flagging based on global CV ---
     if 'global_cv' in df_real.columns:
-        cv_threshold = np.percentile(df_real['global_cv'], 25)
+        cv_threshold = np.nanpercentile(df_real['global_cv'], 25)
+
         df_real['global_cv_flag'] = df_real['global_cv'].apply(
             lambda cv: 'likely background' if cv <= cv_threshold else ''
         )
