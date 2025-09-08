@@ -24,15 +24,21 @@ from puppi.features import feature_engineering
 from puppi.train import train_and_score
 import pandas as pd
 
-# Step 1: Load data and run feature engineering
-df = pd.read_csv("your_input_file.csv")
-features_df = feature_engineering(df, control_keywords=["EGFP", "Empty"])
 
-# Step 2: Train model and estimate FDR
-results_df = train_and_score(features_df, initial_positives=10, initial_negatives=200)
+# Load intensity table
+intensity_df = pd.read_csv("input_intensity_dataset.tsv", sep="\t")
 
-# Save output
-results_df.to_csv("puppi_results.csv", index=False)
+controls = ['EGFP', 'Empty', 'NminiTurbo']
+
+# Run feature engineering
+features_df = feature_engineering(intensity_df, controls)
+
+# features_df = pd.read_csv("features.csv")
+
+
+# Run PU learning and FDR estimation
+scored_df = train_and_score(features_df, initial_positives=15, initial_negatives=200)
+
 ```
 
 ## Output
