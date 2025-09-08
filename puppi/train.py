@@ -199,3 +199,5 @@ def train_and_score(
     df_real['global_cv_flag'] = df_real['global_cv'].apply(
         lambda cv: 'likely background' if cv <= cv_threshold else ''
     )
+
+    return df_real
