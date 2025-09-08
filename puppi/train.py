@@ -148,9 +148,7 @@ def train_and_score(
         df_real['global_cv_flag'] = df_real['global_cv'].apply(
             lambda cv: 'likely background' if cv <= cv_threshold else ''
         )
-        print(f"\nBackground flagging based on global_cv ≤ {cv_threshold:.4f}")
-        print("Example flagged entries:")
-        print(df_real[df_real['global_cv_flag'] != ''][['Prey', 'global_cv', 'global_cv_flag']].head())
+
     else:
         df_real['global_cv_flag'] = ''
 
