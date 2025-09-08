@@ -100,23 +100,32 @@ def train_and_score(
     y_pred_proba_calibrated = bagging_rf.predict_proba(X_scaled)[:, 1]
     df_real['predicted_probability'] = y_pred_proba_calibrated
 
-    # --- Decoy-based FDR estimation ---
-    all_decoy_probs = []
+    # --- Bait-Specific Decoy Generation ---
+    fdr_values_list = []
+    decoy_bait_list = []
 
     for i, bait in enumerate(df_real['Bait'].unique()):
-        np.random.seed(42 + i)  # reproducible decoy shuffling 
-        bait_df = df_real[df_real['Bait'] == bait].copy()
-        df_decoy = bait_df.copy()
-        for col in feature_columns:
-            df_decoy[col] = np.random.permutation(df_decoy[col].values)
-        X_decoy = df_decoy[feature_columns].values
-        X_decoy_scaled = scaler.transform(X_decoy)
-        decoy_probs = bagging_rf.predict_proba(X_decoy_scaled)[:, 1]
-        all_decoy_probs.extend(decoy_probs)
+        np.random.seed(42 + i)  # reproducible decoy shuffling    
+        for bait in df_real['Bait'].unique():
+            bait_df = df_real[df_real['Bait'] == bait].copy()
+            df_decoy = bait_df.copy()
+            for column in feature_columns:
+                df_decoy[column] = np.random.permutation(bait_df[column].values)
+            X_decoy = df_decoy[feature_columns].values
+            X_decoy_scaled = scaler.transform(X_decoy)
+            y_pred_proba_decoy = bagging_rf.predict_proba(X_decoy_scaled)[:, 1]
+            df_decoy['predicted_probability'] = y_pred_proba_decoy
+            fdr_values_list.append(y_pred_proba_decoy)
+            decoy_bait_list.append(df_decoy)
 
+    all_decoy_probs = np.concatenate(fdr_values_list)
+
+
+    # Calculate FDR for each unique probability
     unique_real_probs = np.unique(df_real['predicted_probability'])
     all_decoy_probs_array = np.array(all_decoy_probs)
 
+    # First pass: calculate raw FDR values
     raw_fdr_dict = {}
     for prob in unique_real_probs:
         real_count = (df_real['predicted_probability'] >= prob).sum()
@@ -124,23 +133,31 @@ def train_and_score(
         raw_fdr = min(decoy_count / real_count if real_count > 0 else 1.0, 1.0)
         raw_fdr_dict[prob] = raw_fdr
 
+    # Second pass: enforce monotonicity
+    # Sort probabilities in ascending order
     sorted_probs = np.sort(unique_real_probs)
     fdr_global_dict = {}
+
+    # Start from the lowest probability (highest FDR)
     fdr_global_dict[sorted_probs[0]] = raw_fdr_dict[sorted_probs[0]]
+
+    # For each subsequent probability, FDR should be <= previous FDR
     for i in range(1, len(sorted_probs)):
         current_prob = sorted_probs[i]
         previous_prob = sorted_probs[i-1]
-        fdr_global_dict[current_prob] = min(raw_fdr_dict[current_prob], fdr_global_dict[previous_prob])
+        
+        raw_fdr = raw_fdr_dict[current_prob]
+        previous_fdr = fdr_global_dict[previous_prob]
+        
+        # FDR cannot increase as probability increases
+        fdr_global_dict[current_prob] = min(raw_fdr, previous_fdr)
 
     df_real['FDR'] = df_real['predicted_probability'].map(fdr_global_dict)
 
-    # --- Flag likely background based on global_cv ---
-    cv_threshold = np.percentile(df_real['global_cv'], 25)
+    # --- Flag preys based on global_cv ---
+    cv_threshold = np.percentile(df_real['global_cv'], 25)  # 10th percentile threshold
     df_real['global_cv_flag'] = df_real['global_cv'].apply(
         lambda cv: 'likely background' if cv <= cv_threshold else ''
     )
-
-    df_real.to_csv(output_file, index=False)
-    print(f"Model training and scoring completed. Results saved to:\n{output_file}")
 
     return df_real
