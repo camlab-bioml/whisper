@@ -1,5 +1,3 @@
-### Benchmarking BioID DIA Function ###
-
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -32,13 +30,13 @@ def train_and_score(features_dataframe, initial_positives, initial_negatives):
         DataFrame with predicted probabilities and FDR values
     """
     
-    # Make a copy to avoid modifying the original dataframe
-    df_real = features_dataframe.copy()
-    
-    # Set random seed
+    # Set random seed at the very beginning - CRITICAL for reproducibility
     np.random.seed(42)
+    
+    # Make a deep copy to avoid any reference issues
+    df_real = features_dataframe.copy(deep=True)
 
-    # Feature columns
+    # Feature columns - exactly as in original
     feature_columns = [
         'log_fold_change', 'snr', 'mean_diff', 'median_diff', 
         'replicate_fold_change_sd', 'bait_cv', 'bait_control_sd_ratio', 
@@ -98,7 +96,7 @@ def train_and_score(features_dataframe, initial_positives, initial_negatives):
         count_above = (bait_df['composite_score'] > top50_mean).sum()
         all_counts.append(count_above)
 
-    # Use the provided initial_positives parameter instead of fixed 15
+    # Use the provided initial_positives parameter
     average_top_count = initial_positives
 
     bait_scaled_positives = {bait: (average_top_count if bait in strong_baits else 0)
@@ -110,7 +108,6 @@ def train_and_score(features_dataframe, initial_positives, initial_negatives):
 
     # Label positives & negatives
     y_train_labels = pd.Series(0, index=df_real.index)
-    # Use the provided initial_negatives parameter
     N_negatives = initial_negatives
 
     for bait in df_real['Bait'].unique():
@@ -214,4 +211,3 @@ def train_and_score(features_dataframe, initial_positives, initial_negatives):
     print(f"\nModel training and bait-specific decoy FDR estimation completed.")
     
     return df_real
-
