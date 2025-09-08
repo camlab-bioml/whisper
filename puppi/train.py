@@ -16,13 +16,29 @@ def train_and_score(
     initial_negatives: int = 200
 ) -> pd.DataFrame:
     """
-    Train Bagging(RandomForest) using your PU labeling scheme and compute global decoy FDR.
-    Logic matches the Benchmarking BioID DIA script, with only two tunable parameters:
-    initial_positives (default 15) and initial_negatives (default 200).
+    Train Bagging(RandomForest) using PU labeling and compute global decoy FDR.
+
+    Parameters
+    ----------
+    df_real : pd.DataFrame
+        Feature-engineered dataframe (from features.py).
+    initial_positives : int, default=15
+        Number of positives to select per strong bait.
+    initial_negatives : int, default=200
+        Number of negatives to select per bait.
+
+    Returns
+    -------
+    pd.DataFrame
+        Input dataframe with added columns:
+        - 'predicted_probability'
+        - 'FDR'
+        - 'global_cv_flag'
     """
 
     np.random.seed(42)
 
+    # Feature columns
     feature_columns = [
         'log_fold_change', 'snr', 'mean_diff', 'median_diff',
         'replicate_fold_change_sd', 'bait_cv', 'bait_control_sd_ratio',
@@ -35,20 +51,23 @@ def train_and_score(
         bait: df_real[df_real['Bait'] == bait]['composite_score'].nlargest(50).std()
         for bait in df_real['Bait'].unique()
     }
-    bait_names = np.array(list(bait_top50_stds.keys()))
+
+    bait_names  = np.array(list(bait_top50_stds.keys()))
     bait_scores = np.array(list(bait_top50_stds.values())).reshape(-1, 1)
 
+    # Cluster only if we have > 2 baits
     if len(bait_names) > 2:
         linkage_matrix = linkage(bait_scores, method='ward')
         clusters = fcluster(linkage_matrix, t=2, criterion='maxclust')
     else:
-        clusters = np.ones(len(bait_names), dtype=int)
+        clusters = np.ones(len(bait_names), dtype=int)  # all strong
 
     bait_cluster_map = {bait: int(cluster) for bait, cluster in zip(bait_names, clusters)}
 
+    # Decide which cluster is "strong"
     unique_clusters = np.unique(clusters)
     cluster_sizes = {c: int(np.sum(clusters == c)) for c in unique_clusters}
-    cluster_means = {c: float(bait_scores[clusters == c].mean()) for c in unique_clusters}
+    cluster_means  = {c: float(bait_scores[clusters == c].mean()) for c in unique_clusters}
 
     max_size = max(cluster_sizes.values())
     cands = [c for c, n in cluster_sizes.items() if n == max_size]
@@ -63,20 +82,18 @@ def train_and_score(
     print(f"\nStrong cluster chosen: {strong_cluster_id} "
           f"(size={cluster_sizes[strong_cluster_id]}, mean={cluster_means[strong_cluster_id]:.4f})")
 
+    # --- Assign positives ---
     baits = list(df_real['Bait'].unique())
     strong_baits = [b for b in bait_names if bait_cluster_map[b] == strong_cluster_id]
 
-    # ONLY CHANGE #1: use parameter for positives cap
-    average_top_count = initial_positives
-
-    bait_scaled_positives = {bait: (average_top_count if bait in strong_baits else 0)
+    bait_scaled_positives = {bait: (initial_positives if bait in strong_baits else 0)
                              for bait in baits}
 
     print("\nAssigned positives:")
     for bait, npos in bait_scaled_positives.items():
         print(f"Bait: {bait}, Positives: {npos}")
 
-    # Label positives & negatives
+    # --- Label positives & negatives ---
     y_train_labels = pd.Series(0, index=df_real.index)
 
     for bait in df_real['Bait'].unique():
@@ -91,12 +108,10 @@ def train_and_score(
             y_train_labels.loc[top_positives] = 1
 
             remaining = bait_df.drop(index=top_positives, errors='ignore')
-            # ONLY CHANGE #2: use parameter for negatives count
             bottom_negatives = remaining['composite_score'].nsmallest(initial_negatives).index
             y_train_labels.loc[bottom_negatives] = -1
 
     labeled_indices = y_train_labels[y_train_labels != 0].index
-    # keep this indexing EXACTLY as in your script
     X_train, y_train = X_real[labeled_indices], y_train_labels.loc[labeled_indices]
 
     scaler = StandardScaler()
@@ -110,7 +125,7 @@ def train_and_score(
     y_pred_proba_calibrated = bagging_rf.predict_proba(X_scaled)[:, 1]
     df_real['predicted_probability'] = y_pred_proba_calibrated
 
-    # Decoy Generation for Global FDR
+    # --- Decoy Generation for Global FDR ---
     all_decoy_probs = []
     for bait in df_real['Bait'].unique():
         bait_df = df_real[df_real['Bait'] == bait]
@@ -122,8 +137,9 @@ def train_and_score(
         decoy_probs = bagging_rf.predict_proba(X_decoy_scaled)[:, 1]
         all_decoy_probs.extend(decoy_probs)
 
-    all_decoy_probs_array = np.array(all_decoy_probs)
+    # --- Global FDR ---
     unique_real_probs = np.unique(df_real['predicted_probability'])
+    all_decoy_probs_array = np.array(all_decoy_probs)
 
     raw_fdr_dict = {}
     for prob in unique_real_probs:
@@ -137,11 +153,12 @@ def train_and_score(
     fdr_global_dict[sorted_probs[0]] = raw_fdr_dict[sorted_probs[0]]
     for i in range(1, len(sorted_probs)):
         current_prob = sorted_probs[i]
-        previous_prob = sorted_probs[i - 1]
+        previous_prob = sorted_probs[i-1]
         fdr_global_dict[current_prob] = min(raw_fdr_dict[current_prob], fdr_global_dict[previous_prob])
 
     df_real['FDR'] = df_real['predicted_probability'].map(fdr_global_dict)
 
+    # --- Flag preys based on global_cv ---
     cv_threshold = np.percentile(df_real['global_cv'], 25)
     df_real['global_cv_flag'] = df_real['global_cv'].apply(
         lambda cv: 'likely background' if cv <= cv_threshold else ''
