@@ -3,46 +3,44 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier, BaggingClassifier
 from sklearn.preprocessing import StandardScaler
 from scipy.cluster.hierarchy import linkage, fcluster
-import os
 
 def train_and_score(
     features_df: pd.DataFrame,
     initial_positives: int = 15,
     initial_negatives: int = 200,
-    output_file: str = 'puppi_results.csv'
 ) -> pd.DataFrame:
     """
-    Train a PU-learning model and assign FDR scores to BioID features.
+    Trains a PU-learning model using hierarchical bait clustering, assigns positives and negatives,
+    computes decoy-based monotonic FDR, and flags likely background preys based on global_cv.
 
     Parameters:
-        features_df (pd.DataFrame): Input feature dataframe with one row per bait-prey.
-        initial_positives (int): Number of positives to sample per strong bait.
-        initial_negatives (int): Number of negatives to sample per bait.
-        output_file (str): Path to save results.
+        features_df (pd.DataFrame): Aggregated feature matrix with 'global_cv', 'composite_score', etc.
+        initial_positives (int): Number of positives to assign per strong bait.
+        initial_negatives (int): Number of negatives to assign per bait.
+        output_file (str): Optional path to write CSV output.
 
     Returns:
-        pd.DataFrame: The same input dataframe with added prediction and FDR columns.
+        pd.DataFrame: Scored DataFrame with columns: predicted_probability, FDR, global_cv_flag
     """
+    df_real = features_df.copy()
+    df_real = df_real.sort_values(["Bait", "Prey"]).reset_index(drop=True)
 
     np.random.seed(42)
 
     feature_columns = [
-        'log_fold_change', 'snr', 'mean_diff', 'median_diff',
-        'replicate_fold_change_sd', 'bait_cv', 'bait_control_sd_ratio',
+        'log_fold_change', 'snr', 'mean_diff', 'median_diff', 
+        'replicate_fold_change_sd', 'bait_cv', 'bait_control_sd_ratio', 
         'zero_or_neg_fc',
     ]
-    
-    df_real = features_df.copy()
-    df_real = df_real.sort_values(["Bait", "Prey"]).reset_index(drop=True)
     X_real = df_real[feature_columns].values
 
-    # --- Bait clustering to determine strong/weak baits ---
+    # --- Hierarchical Clustering of Baits ---
     bait_top50_stds = {
         bait: df_real[df_real['Bait'] == bait]['composite_score'].nlargest(50).std()
         for bait in df_real['Bait'].unique()
     }
 
-    bait_names = np.array(list(bait_top50_stds.keys()))
+    bait_names  = np.array(list(bait_top50_stds.keys()))
     bait_scores = np.array(list(bait_top50_stds.values())).reshape(-1, 1)
 
     if len(bait_names) > 2:
@@ -58,16 +56,24 @@ def train_and_score(
     cluster_means = {c: float(bait_scores[clusters == c].mean()) for c in unique_clusters}
     max_size = max(cluster_sizes.values())
     cands = [c for c, n in cluster_sizes.items() if n == max_size]
-
     strong_cluster_id = cands[0] if len(cands) == 1 else max(cands, key=lambda c: cluster_means[c])
+
     strong_baits = [b for b in bait_names if bait_cluster_map[b] == strong_cluster_id]
+
+    # --- Assign positives proportionally to top-50 mean ---
+    all_counts = []
+    for bait in strong_baits:
+        bait_df = df_real[df_real['Bait'] == bait]
+        top50_mean = bait_df['composite_score'].nlargest(50).mean()
+        count_above = (bait_df['composite_score'] > top50_mean).sum()
+        all_counts.append(count_above)
 
     bait_scaled_positives = {
         bait: (initial_positives if bait in strong_baits else 0)
         for bait in df_real['Bait'].unique()
     }
 
-    # --- Label positives & negatives ---
+    # --- Label positives and negatives ---
     y_train_labels = pd.Series(0, index=df_real.index)
 
     for bait in df_real['Bait'].unique():
@@ -84,7 +90,7 @@ def train_and_score(
             bottom_negatives = remaining['composite_score'].nsmallest(initial_negatives).index
             y_train_labels.loc[bottom_negatives] = -1
 
-    # --- Train PU classifier ---
+    # --- Classifier training ---
     labeled_indices = y_train_labels[y_train_labels != 0].index
     X_train = X_real[labeled_indices]
     y_train = y_train_labels.loc[labeled_indices]
@@ -100,32 +106,23 @@ def train_and_score(
     y_pred_proba_calibrated = bagging_rf.predict_proba(X_scaled)[:, 1]
     df_real['predicted_probability'] = y_pred_proba_calibrated
 
-    # --- Bait-Specific Decoy Generation ---
-    fdr_values_list = []
-    decoy_bait_list = []
-
+    # --- Bait-wise Decoy Generation ---
+    all_decoy_probs = []
     for i, bait in enumerate(df_real['Bait'].unique()):
-        np.random.seed(42 + i)  # reproducible decoy shuffling    
-        for bait in df_real['Bait'].unique():
-            bait_df = df_real[df_real['Bait'] == bait].copy()
-            df_decoy = bait_df.copy()
-            for column in feature_columns:
-                df_decoy[column] = np.random.permutation(bait_df[column].values)
-            X_decoy = df_decoy[feature_columns].values
-            X_decoy_scaled = scaler.transform(X_decoy)
-            y_pred_proba_decoy = bagging_rf.predict_proba(X_decoy_scaled)[:, 1]
-            df_decoy['predicted_probability'] = y_pred_proba_decoy
-            fdr_values_list.append(y_pred_proba_decoy)
-            decoy_bait_list.append(df_decoy)
+        np.random.seed(42 + i)
+        bait_df = df_real[df_real['Bait'] == bait]
+        df_decoy = bait_df.copy()
+        for col in feature_columns:
+            df_decoy[col] = np.random.permutation(df_decoy[col].values)
+        X_decoy = df_decoy[feature_columns].values
+        X_decoy_scaled = scaler.transform(X_decoy)
+        decoy_probs = bagging_rf.predict_proba(X_decoy_scaled)[:, 1]
+        all_decoy_probs.extend(decoy_probs)
 
-    all_decoy_probs = np.concatenate(fdr_values_list)
-
-
-    # Calculate FDR for each unique probability
-    unique_real_probs = np.unique(df_real['predicted_probability'])
     all_decoy_probs_array = np.array(all_decoy_probs)
+    unique_real_probs = np.unique(df_real['predicted_probability'])
 
-    # First pass: calculate raw FDR values
+    # --- FDR Estimation ---
     raw_fdr_dict = {}
     for prob in unique_real_probs:
         real_count = (df_real['predicted_probability'] >= prob).sum()
@@ -133,31 +130,29 @@ def train_and_score(
         raw_fdr = min(decoy_count / real_count if real_count > 0 else 1.0, 1.0)
         raw_fdr_dict[prob] = raw_fdr
 
-    # Second pass: enforce monotonicity
-    # Sort probabilities in ascending order
     sorted_probs = np.sort(unique_real_probs)
     fdr_global_dict = {}
-
-    # Start from the lowest probability (highest FDR)
     fdr_global_dict[sorted_probs[0]] = raw_fdr_dict[sorted_probs[0]]
-
-    # For each subsequent probability, FDR should be <= previous FDR
     for i in range(1, len(sorted_probs)):
         current_prob = sorted_probs[i]
-        previous_prob = sorted_probs[i-1]
-        
+        previous_prob = sorted_probs[i - 1]
         raw_fdr = raw_fdr_dict[current_prob]
-        previous_fdr = fdr_global_dict[previous_prob]
-        
-        # FDR cannot increase as probability increases
-        fdr_global_dict[current_prob] = min(raw_fdr, previous_fdr)
+        fdr_global_dict[current_prob] = min(raw_fdr, fdr_global_dict[previous_prob])
 
     df_real['FDR'] = df_real['predicted_probability'].map(fdr_global_dict)
 
-    # --- Flag preys based on global_cv ---
-    cv_threshold = np.percentile(df_real['global_cv'], 25)  # 10th percentile threshold
-    df_real['global_cv_flag'] = df_real['global_cv'].apply(
-        lambda cv: 'likely background' if cv <= cv_threshold else ''
-    )
+    # --- Background flagging based on global CV ---
+    if 'global_cv' in df_real.columns:
+        cv_threshold = np.percentile(df_real['global_cv'], 25)
+        df_real['global_cv_flag'] = df_real['global_cv'].apply(
+            lambda cv: 'likely background' if cv <= cv_threshold else ''
+        )
+        print(f"\nBackground flagging based on global_cv ≤ {cv_threshold:.4f}")
+        print("Example flagged entries:")
+        print(df_real[df_real['global_cv_flag'] != ''][['Prey', 'global_cv', 'global_cv_flag']].head())
+    else:
+        df_real['global_cv_flag'] = ''
+
+    df_real.to_csv('puppi_result.csv', index=False)
 
     return df_real
