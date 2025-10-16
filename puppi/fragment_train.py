@@ -1,5 +1,6 @@
 # puppi/fragment_train.py
 
+import os
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier, BaggingClassifier
@@ -14,28 +15,37 @@ def train_and_score_fragment(
     initial_positives: int = 15,
     initial_negatives: int = 200,
     random_state: int = 42,
-    save_path: str = "fragment_scores.csv",
-) -> pd.DataFrame:
+    save_dir: str = ".",
+    fragment_out: str = "puppi_fragment_scores.csv",
+    protein_out: str = "puppi_protein_scores_from_fragments.csv",
+    aggregate_strategy: str = "max",   # "max" or "mean" for fragment->protein prob aggregation
+):
     """
-    Train PU model on FRAGMENT-level features and compute bait-specific decoy FDR.
+    Train a PU model on FRAGMENT-level features, compute bait-specific decoy FDR,
+    and aggregate to PROTEIN-level scores per bait.
 
     Expected columns in `features_df`:
       - Bait, Protein, Peptide, Fragment
-      - composite_score, global_cv, single_rep_flag (optional)
+      - composite_score, global_cv (optional), single_rep_flag (optional)
       - Feature columns:
           ['log_fold_change','snr','mean_diff','median_diff',
            'replicate_fold_change_sd','bait_cv','bait_control_sd_ratio','zero_or_neg_fc']
 
+    Saves:
+      - <save_dir>/<fragment_out>: fragment-level scores with FDR
+      - <save_dir>/<protein_out>: protein-level aggregation per bait
+
     Returns:
-      DataFrame with added columns:
-        predicted_probability, FDR, global_cv_flag
+      (fragment_df, protein_df)
     """
     rng = np.random.RandomState(random_state)
 
     # Stable order
-    df = features_df.copy().sort_values(
-        ["Bait", "Protein", "Peptide", "Fragment"]
-    ).reset_index(drop=True)
+    df = (
+        features_df.copy()
+        .sort_values(["Bait", "Protein", "Peptide", "Fragment"])
+        .reset_index(drop=True)
+    )
 
     feature_columns = [
         "log_fold_change", "snr", "mean_diff", "median_diff",
@@ -136,5 +146,30 @@ def train_and_score_fragment(
     else:
         df["global_cv_flag"] = ""
 
-    df.to_csv(save_path, index=False)
-    return df
+    # ===== AGGREGATE TO PROTEIN-LEVEL (per bait) =====
+    prob_agg = "max" if aggregate_strategy.lower() == "max" else "mean"
+
+    grp = df.groupby(["Bait", "Protein"])
+    protein_df = grp.agg(
+        predicted_probability=("predicted_probability", prob_agg),
+        FDR=("FDR", "min"),
+        n_fragments=("Fragment", "count"),
+        n_background=("global_cv_flag", lambda x: (x == "likely background").sum()),
+        mean_cv=("global_cv", "mean"),
+    ).reset_index()
+
+    protein_df["background_flag_protein"] = np.where(
+        protein_df["n_background"] >= 0.5 * protein_df["n_fragments"],
+        "likely background",
+        "",
+    )
+
+    # ----- Save both -----
+    os.makedirs(save_dir, exist_ok=True)
+    fragment_path = os.path.join(save_dir, fragment_out)
+    protein_path = os.path.join(save_dir, protein_out)
+
+    df.to_csv(fragment_path, index=False)
+    protein_df.to_csv(protein_path, index=False)
+
+    return df, protein_df

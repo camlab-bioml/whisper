@@ -141,5 +141,5 @@ def train_and_score_protein(
         df_real["global_cv_flag"] = ""
 
     # === Save ===
-    df_real.to_csv("puppi_result.csv", index=False)
+    df_real.to_csv("puppi_protein_scores.csv", index=False)
     return df_real

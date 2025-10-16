@@ -1,5 +1,6 @@
 # puppi/peptide_train.py
 
+import os
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier, BaggingClassifier
@@ -14,25 +15,32 @@ def train_and_score_peptide(
     initial_positives: int = 15,
     initial_negatives: int = 200,
     random_state: int = 42,
-    save_path: str = "peptide_scores.csv",
-) -> pd.DataFrame:
+    save_dir: str = ".",
+    peptide_out: str = "puppi_peptide_scores.csv",
+    protein_out: str = "puppi_protein_scores_from_peptides.csv",
+    aggregate_strategy: str = "max",   # "max" or "mean" for peptide->protein prob aggregation
+):
     """
-    Train PU model on PEPTIDE-level features and compute bait-specific decoy FDR.
+    Train a PU model on PEPTIDE-level features, compute bait-specific decoy FDR,
+    and aggregate to PROTEIN-level scores per bait.
 
     Expected columns in `features_df`:
       - Bait, Protein, Peptide
-      - composite_score, global_cv, single_rep_flag (optional)
+      - composite_score, global_cv (optional), single_rep_flag (optional)
       - Feature columns:
           ['log_fold_change','snr','mean_diff','median_diff',
            'replicate_fold_change_sd','bait_cv','bait_control_sd_ratio','zero_or_neg_fc']
 
+    Saves:
+      - <save_dir>/<peptide_out>: peptide-level scores with FDR
+      - <save_dir>/<protein_out>: protein-level aggregation per bait
+
     Returns:
-      DataFrame with added columns:
-        predicted_probability, FDR, global_cv_flag
+      (peptide_df, protein_df)
     """
     rng = np.random.RandomState(random_state)
 
-    # Sort for stable behavior
+    # ----- Stable sort -----
     df = features_df.copy().sort_values(["Bait", "Protein", "Peptide"]).reset_index(drop=True)
 
     feature_columns = [
@@ -42,7 +50,7 @@ def train_and_score_peptide(
     ]
     X = df[feature_columns].values
 
-    # ---------- Cluster baits to find "strong" group (same logic as protein) ----------
+    # ----- Cluster baits to identify "strong" cluster (same logic as protein) -----
     bait_top50_stds = {
         b: df[df["Bait"] == b]["composite_score"].nlargest(50).std()
         for b in df["Bait"].unique()
@@ -63,7 +71,7 @@ def train_and_score_peptide(
     strong_cluster_id = cands[0] if len(cands) == 1 else max(cands, key=lambda c: cluster_means[c])
     strong_baits = [b for b, c in zip(bait_names, clusters) if c == strong_cluster_id]
 
-    # ---------- Pseudo-labels ----------
+    # ----- Pseudo-labels -----
     y = pd.Series(0, index=df.index)  # 0=unlabeled, 1=pos, -1=neg
     bait_pos_quota = {b: (initial_positives if b in strong_baits else 0) for b in df["Bait"].unique()}
 
@@ -85,7 +93,7 @@ def train_and_score_peptide(
     X_tr = X[labeled_idx]
     y_tr = y.loc[labeled_idx].values
 
-    # ---------- Train bagged RF ----------
+    # ----- Train bagged RF -----
     scaler = StandardScaler().fit(X_tr)
     X_tr_std = scaler.transform(X_tr)
 
@@ -96,7 +104,7 @@ def train_and_score_peptide(
     X_std = scaler.transform(X)
     df["predicted_probability"] = clf.predict_proba(X_std)[:, 1]
 
-    # ---------- Bait-specific decoy shuffles for FDR ----------
+    # ----- Bait-specific decoy shuffles for FDR -----
     decoys = []
     for i, bait in enumerate(df["Bait"].unique()):
         rng_i = np.random.RandomState(random_state + i)
@@ -116,7 +124,7 @@ def train_and_score_peptide(
         n_dec = np.sum(decoy_probs >= p) if decoy_probs.size else 0
         raw_fdr[p] = min(n_dec / n_real if n_real > 0 else 1.0, 1.0)
 
-    # monotonic (non-increasing) FDR with prob
+    # monotonic FDR (non-increasing with probability)
     sorted_p = np.sort(unique_p)
     mono_fdr = {sorted_p[0]: raw_fdr[sorted_p[0]]}
     for i in range(1, len(sorted_p)):
@@ -126,7 +134,7 @@ def train_and_score_peptide(
 
     df["FDR"] = df["predicted_probability"].map(mono_fdr)
 
-    # ---------- Background flag by global CV (optional) ----------
+    # ----- Background flag by global CV (optional) -----
     if "global_cv" in df.columns:
         cv_thresh = np.nanpercentile(df["global_cv"], 25)
         df["global_cv_flag"] = df["global_cv"].apply(
@@ -135,5 +143,32 @@ def train_and_score_peptide(
     else:
         df["global_cv_flag"] = ""
 
-    df.to_csv(save_path, index=False)
-    return df
+    # ===== AGGREGATE TO PROTEIN-LEVEL (per bait) =====
+    # Choose aggregation for probabilities
+    prob_agg = "max" if aggregate_strategy.lower() == "max" else "mean"
+
+    grp = df.groupby(["Bait", "Protein"])
+    protein_df = grp.agg(
+        predicted_probability=("predicted_probability", prob_agg),
+        FDR=("FDR", "min"),
+        n_peptides=("Peptide", "count"),
+        n_background=("global_cv_flag", lambda x: (x == "likely background").sum()),
+        mean_cv=("global_cv", "mean"),
+    ).reset_index()
+
+    # Protein-level background flag (≥50% peptides flagged)
+    protein_df["background_flag_protein"] = np.where(
+        protein_df["n_background"] >= 0.5 * protein_df["n_peptides"],
+        "likely background",
+        "",
+    )
+
+    # ----- Save both -----
+    os.makedirs(save_dir, exist_ok=True)
+    peptide_path = os.path.join(save_dir, peptide_out)
+    protein_path = os.path.join(save_dir, protein_out)
+
+    df.to_csv(peptide_path, index=False)
+    protein_df.to_csv(protein_path, index=False)
+
+    return df, protein_df
