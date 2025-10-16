@@ -20,8 +20,9 @@ pip install .
 ## Usage
 
 ```python
-from puppi.features import feature_engineering
-from puppi.train import train_and_score
+#protein-level
+from puppi.protein_features import feature_engineering_protein
+from puppi.protein_train import train_and_score_protein
 import pandas as pd
 
 
@@ -31,14 +32,55 @@ intensity_df = pd.read_csv("input_intensity_dataset.tsv", sep="\t")
 controls = ['EGFP', 'Empty', 'NminiTurbo']
 
 # Run feature engineering
-features_df = feature_engineering(intensity_df, controls)
+features_df = feature_engineering_protein(intensity_df, controls)
 
 # features_df = pd.read_csv("features.csv")
 
 
 # Run PU learning and FDR estimation
-scored_df = train_and_score(features_df, initial_positives=15, initial_negatives=200)
+scored_df = train_and_score_protein(features_df, initial_positives=15, initial_negatives=200)
 
+
+#peptide-level
+from puppi.peptide_features import feature_engineering_peptide
+from puppi.peptide_train import train_and_score_peptide
+import pandas as pd
+
+
+# Load intensity table
+intensity_df = pd.read_csv("input_intensity_dataset.tsv", sep="\t")
+
+controls = ['EGFP', 'Empty', 'NminiTurbo']
+
+# Run feature engineering
+features_df = feature_engineering_peptide(intensity_df, controls)
+
+# features_df = pd.read_csv("features.csv")
+
+
+# Run PU learning and FDR estimation
+scored_df = train_and_score_peptide(features_df, initial_positives=15, initial_negatives=200)
+
+
+#fragment-level
+from puppi.fragment_features import feature_engineering_fragment
+from puppi.fragment_train import train_and_score_fragment
+import pandas as pd
+
+
+# Load intensity table
+intensity_df = pd.read_csv("input_intensity_dataset.tsv", sep="\t")
+
+controls = ['EGFP', 'Empty', 'NminiTurbo']
+
+# Run feature engineering
+features_df = feature_engineering_fragment(intensity_df, controls)
+
+# features_df = pd.read_csv("features.csv")
+
+
+# Run PU learning and FDR estimation
+scored_df = train_and_score_fragment(features_df, initial_positives=15, initial_negatives=200)
 ```
 
 ## Output
