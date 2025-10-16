@@ -7,7 +7,7 @@ from sklearn.preprocessing import StandardScaler
 import warnings
 warnings.filterwarnings('ignore')
 
-def feature_engineering(intensity_df: pd.DataFrame, controls: list) -> pd.DataFrame:
+def feature_engineering_protein(intensity_df: pd.DataFrame, controls: list) -> pd.DataFrame:
     """
     Protein-level feature engineering for PUPPI.
 
