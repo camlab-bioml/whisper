@@ -1,4 +1,4 @@
-# puppi/peptide_features.py
+# whisper/peptide_features.py
 
 import pandas as pd
 import numpy as np
@@ -10,7 +10,7 @@ warnings.filterwarnings("ignore")
 
 def feature_engineering_peptide(intensity_df: pd.DataFrame, controls: list) -> pd.DataFrame:
     """
-    Compute peptide-level features for PU-learning.
+    Compute peptide-level features.
     Mirrors the logic of protein_features.feature_engineering, 
     but operates per peptide rather than per protein.
 

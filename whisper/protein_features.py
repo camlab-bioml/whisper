@@ -1,4 +1,4 @@
-# puppi/protein_features.py
+# whisper/protein_features.py
 
 import pandas as pd
 import numpy as np
@@ -9,7 +9,7 @@ warnings.filterwarnings('ignore')
 
 def feature_engineering_protein(intensity_df: pd.DataFrame, controls: list) -> pd.DataFrame:
     """
-    Protein-level feature engineering for PUPPI.
+    Protein-level feature engineering for whisper.
 
     Parameters
     ----------

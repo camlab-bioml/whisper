@@ -1,4 +1,4 @@
-# puppi/fragment_features.py
+# whisper/fragment_features.py
 
 import pandas as pd
 import numpy as np
@@ -10,7 +10,7 @@ warnings.filterwarnings("ignore")
 
 def feature_engineering_fragment(intensity_df: pd.DataFrame, controls: list) -> pd.DataFrame:
     """
-    Compute fragment-level features for PU-learning.
+    Compute fragment-level features.
     Mirrors protein/peptide feature engineering but operates on (Protein, Peptide, Fragment).
 
     Parameters

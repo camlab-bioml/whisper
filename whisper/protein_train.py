@@ -1,4 +1,4 @@
-# puppi/protein_train.py
+# whisper/protein_train.py
 
 import pandas as pd
 import numpy as np
@@ -12,7 +12,7 @@ def train_and_score_protein(
     initial_negatives: int = 200,
 ) -> pd.DataFrame:
     """
-    Train a PU-learning model at the protein level using hierarchical bait clustering,
+    Train a model at the protein level using hierarchical bait clustering,
     pseudo-label assignment, decoy-based monotonic FDR estimation, and global CV flagging.
 
     Parameters
@@ -141,5 +141,5 @@ def train_and_score_protein(
         df_real["global_cv_flag"] = ""
 
     # === Save ===
-    df_real.to_csv("puppi_protein_scores.csv", index=False)
+    df_real.to_csv("whisper_protein_scores.csv", index=False)
     return df_real

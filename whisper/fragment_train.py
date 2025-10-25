@@ -1,4 +1,4 @@
-# puppi/fragment_train.py
+# whsiper/fragment_train.py
 
 import os
 import pandas as pd
@@ -16,12 +16,12 @@ def train_and_score_fragment(
     initial_negatives: int = 200,
     random_state: int = 42,
     save_dir: str = ".",
-    fragment_out: str = "puppi_fragment_scores.csv",
-    protein_out: str = "puppi_protein_scores_from_fragments.csv",
+    fragment_out: str = "whisper_fragment_scores.csv",
+    protein_out: str = "whisper_protein_scores_from_fragments.csv",
     aggregate_strategy: str = "max",   # "max" or "mean" for fragment->protein prob aggregation
 ):
     """
-    Train a PU model on FRAGMENT-level features, compute bait-specific decoy FDR,
+    Train a model on FRAGMENT-level features, compute bait-specific decoy FDR,
     and aggregate to PROTEIN-level scores per bait.
 
     Expected columns in `features_df`:

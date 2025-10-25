@@ -1,9 +1,9 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="puppi",
+    name="whisper",
     version="0.1.0",
-    description="PU learning-based scoring for BioID and AP-MS datasets",
+    description="Weak Heuristic Inference for Supervisory Protein intERaction mapping for PDB and AP-MS datasets",
     author="Vesal kasmaeifar",
     author_email="vesal.kasmaeifar@mail.utoronto.com",
     packages=find_packages(),

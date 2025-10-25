@@ -1,4 +1,4 @@
-# puppi/peptide_train.py
+# whisper/peptide_train.py
 
 import os
 import pandas as pd
@@ -16,12 +16,12 @@ def train_and_score_peptide(
     initial_negatives: int = 200,
     random_state: int = 42,
     save_dir: str = ".",
-    peptide_out: str = "puppi_peptide_scores.csv",
-    protein_out: str = "puppi_protein_scores_from_peptides.csv",
+    peptide_out: str = "whisper_peptide_scores.csv",
+    protein_out: str = "whisper_protein_scores_from_peptides.csv",
     aggregate_strategy: str = "max",   # "max" or "mean" for peptide->protein prob aggregation
 ):
     """
-    Train a PU model on PEPTIDE-level features, compute bait-specific decoy FDR,
+    Train a model on PEPTIDE-level features, compute bait-specific decoy FDR,
     and aggregate to PROTEIN-level scores per bait.
 
     Expected columns in `features_df`:
