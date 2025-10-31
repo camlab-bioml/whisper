@@ -172,4 +172,4 @@ def train_and_score_fragment(
     df.to_csv(fragment_path, index=False)
     protein_df.to_csv(protein_path, index=False)
 
-    return df, protein_df
+    return protein_df

@@ -171,4 +171,4 @@ def train_and_score_peptide(
     df.to_csv(peptide_path, index=False)
     protein_df.to_csv(protein_path, index=False)
 
-    return df, protein_df
+    return protein_df
