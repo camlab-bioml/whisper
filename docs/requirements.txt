@@ -1,5 +1,8 @@
-sphinx>=7
-myst-parser>=2
-furo>=2024.8.6
-linkify-it-py>=2
-sphinx-rtd-theme>=2
+sphinx>=4.0
+sphinx-rtd-theme
+myst-parser
+myst-nb
+nbsphinx
+sphinx-autobuild
+sphinx-copybutton
+sphinxcontrib-bibtex 
