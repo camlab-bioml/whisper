@@ -6,3 +6,4 @@ nbsphinx
 sphinx-autobuild
 sphinx-copybutton
 sphinxcontrib-bibtex 
+ipykernel

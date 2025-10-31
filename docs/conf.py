@@ -10,7 +10,10 @@ extensions = [
     'sphinx.ext.intersphinx',
     'myst_nb',
     'sphinx_rtd_theme',
+    "myst_parser",
+    "nbsphinx",
 ]
+
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store', '**.ipynb_checkpoints']
