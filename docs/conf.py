@@ -38,15 +38,6 @@ myst_nb_render_priority = {
     "latex": ("text/latex", "image/png", "text/plain")
 }
 
-# Intersphinx mapping
-intersphinx_mapping = {
-    'python': ('https://docs.python.org/3/', None),
-    'numpy': ('https://numpy.org/doc/stable/', None),
-    'sklearn': ('https://scikit-learn.org/stable/', None),
-    'opencv': ('https://docs.opencv.org/4.x/', None),
-    'optuna': ('https://optuna.readthedocs.io/en/stable/', None),
-}
-
 # Autodoc settings
 autodoc_default_options = {
     'members': True,
