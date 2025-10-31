@@ -7,4 +7,4 @@ Welcome to the **whisper** documentation.
 :caption: Contents
 
 readme
-tutorial_whisper
+tutorial
