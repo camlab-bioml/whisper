@@ -55,26 +55,3 @@ autodoc_default_options = {
 }
 
 autosummary_generate = True 
-
-
-from sphinx.application import Sphinx
-
-def setup(app: Sphinx):
-    app.add_css_file(None, body="""
-    /* scroll wide pandas tables */
-    table.dataframe, .dataframe {
-        display: block;
-        overflow-x: auto;
-        white-space: nowrap;
-    }
-
-    /* scroll wide cell outputs */
-    div.nboutput, div.output_area {
-        overflow-x: auto;
-    }
-
-    /* widen content column */
-    .wy-nav-content {
-        max-width: 1200px;
-    }
-    """)
