@@ -4,3 +4,5 @@ Welcome to the **whisper** documentation.
 :maxdepth: 2
 
 readme
+
+tutorial_whisper
