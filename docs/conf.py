@@ -31,7 +31,7 @@ myst_enable_extensions = [
 ]
 
 # MyST-NB settings for notebook execution
-nb_execution_mode = "off"  # Don't execute notebooks during build
+nb_execution_mode = "off"
 nb_execution_timeout = 60
 myst_nb_render_priority = {
     "html": ("application/vnd.jupyter.widget-view+json", "text/html", "image/png", "text/plain"),
