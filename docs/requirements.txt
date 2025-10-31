@@ -2,7 +2,6 @@ sphinx>=4.0
 sphinx-rtd-theme
 myst-parser
 myst-nb
-nbsphinx
 sphinx-autobuild
 sphinx-copybutton
 sphinxcontrib-bibtex 

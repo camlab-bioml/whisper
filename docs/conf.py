@@ -9,9 +9,7 @@ extensions = [
     'sphinx.ext.viewcode',
     'sphinx.ext.intersphinx',
     'myst_nb',
-    'sphinx_rtd_theme',
-    "myst_parser",
-    "nbsphinx",
+    'myst_parser',
 ]
 
 
