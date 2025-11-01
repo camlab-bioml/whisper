@@ -1,6 +1,6 @@
 # WHISPER
 
-`whisper` is a Python package for scoring protein–protein interactions from proximity labeling and affinity purification mass spectrometry datasets. It uses interpretable features, programmatic weak supervision, and decoy-based false discovery rate (FDR) estimation to identify high-confidence interactors.
+`whisper` is a Python package for scoring protein–protein interactions from proximity labeling and affinity purification mass spectrometry datasets. It uses interpretable features, programmatic weak supervision, and decoy-based false discovery rate (FDR) estimation to identify high-confidence interactors. 
 
 ## Installation
 
@@ -34,7 +34,9 @@ controls = ['EGFP', 'Empty', 'NminiTurbo']
 # Run feature engineering
 features_df = feature_engineering_protein(intensity_df, controls)
 
-# features_df = pd.read_csv("features.csv")
+# You can save the features to use in the next step with different settings without generating them again.
+features_df = pd.read_csv("features.csv")
+ 
 
 
 # Run scoring and FDR estimation
