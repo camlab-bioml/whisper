@@ -1,21 +1,30 @@
+Metadata-Version: 2.4
+Name: whisper-ppi
+Version: 0.1.0
+Summary: Weak Heuristic Inference for Supervisory Protein intERaction mapping for PDB and AP-MS datasets
+Home-page: https://github.com/camlab-bioml/whisper
+Author: Vesal Kasmaeifar
+Author-email: vesal.kasmaeifar@mail.utoronto.com
+License: MIT
+Project-URL: Documentation, https://whisper.readthedocs.io/en/latest/
+Project-URL: Source, https://github.com/camlab-bioml/whisper
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Intended Audience :: Science/Research
+Classifier: Topic :: Scientific/Engineering :: Bio-Informatics
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: numpy
+Requires-Dist: pandas
+Requires-Dist: scikit-learn
+Requires-Dist: scipy
+
 # whisper
 
-[![PyPI](https://img.shields.io/pypi/v/whisper-ppi.svg?color=brightgreen)](https://pypi.org/project/whisper-ppi/)
-[![Docs](https://readthedocs.org/projects/whisper-ppi/badge/?version=latest)](https://whisper-ppi.readthedocs.io/en/latest/)
-[![Python](https://img.shields.io/pypi/pyversions/whisper-ppi.svg)](https://pypi.org/project/whisper-ppi/)
+`whisper` is a Python package for scoring protein–protein interactions from proximity labeling and affinity purification mass spectrometry datasets. It uses interpretable features, programmatic weak supervision, and decoy-based false discovery rate (FDR) estimation to identify high-confidence interactors.
 
-`whisper-ppi` is a Python package for scoring protein–protein interactions from proximity labeling and affinity purification mass spectrometry datasets.  
-It uses interpretable features, **programmatic weak supervision**, and **decoy-based false discovery rate (FDR)** estimation to identify high-confidence interactors.
-
----
-
-## Install from PyPI:
-
-```bash
-pip install whisper-ppi
-```
-
-## Install from GitHub:
+## Installation
 
 ```bash
 git clone https://github.com/camlab-bioml/whisper

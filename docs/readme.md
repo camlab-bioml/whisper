@@ -1,8 +1,21 @@
-# WHISPER
+# whisper
 
-`whisper` is a Python package for scoring protein–protein interactions from proximity labeling and affinity purification mass spectrometry datasets. It uses interpretable features, programmatic weak supervision, and decoy-based false discovery rate (FDR) estimation to identify high-confidence interactors. 
+[![PyPI](https://img.shields.io/pypi/v/whisper-ppi.svg?color=brightgreen)](https://pypi.org/project/whisper-ppi/)
+[![Docs](https://readthedocs.org/projects/whisper-ppi/badge/?version=latest)](https://whisper-ppi.readthedocs.io/en/latest/)
+[![Python](https://img.shields.io/pypi/pyversions/whisper-ppi.svg)](https://pypi.org/project/whisper-ppi/)
 
-## Installation
+`whisper-ppi` is a Python package for scoring protein–protein interactions from proximity labeling and affinity purification mass spectrometry datasets.  
+It uses interpretable features, **programmatic weak supervision**, and **decoy-based false discovery rate (FDR)** estimation to identify high-confidence interactors.
+
+---
+
+## Install from PyPI:
+
+```bash
+pip install whisper-ppi
+```
+
+## Install from GitHub:
 
 ```bash
 git clone https://github.com/camlab-bioml/whisper
@@ -36,7 +49,6 @@ features_df = feature_engineering_protein(intensity_df, controls)
 
 # You can save the features to use in the next step with different settings without generating them again.
 features_df = pd.read_csv("features.csv")
- 
 
 
 # Run scoring and FDR estimation
@@ -91,6 +103,11 @@ The final output includes:
 - `predicted_probability`: Probability of each bait–prey interaction being real
 - `FDR`: Estimated false discovery rate
 - `global_cv_flag`: Flag for likely background preys based on variability across all samples
+
+## Tutorial
+
+[Read the full documentation](https://whisper.readthedocs.io/en/latest/)
+
 
 ## Citation
 
