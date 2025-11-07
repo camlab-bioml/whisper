@@ -1,7 +1,6 @@
 # whisper
 
 [![PyPI](https://img.shields.io/pypi/v/whisper-ppi.svg?color=brightgreen)](https://pypi.org/project/whisper-ppi/)
-[![Docs](https://readthedocs.org/projects/whisper-ppi/badge/?version=latest)](https://whisper-ppi.readthedocs.io/en/latest/)
 [![Python](https://img.shields.io/pypi/pyversions/whisper-ppi.svg)](https://pypi.org/project/whisper-ppi/)
 
 `whisper-ppi` is a Python package for scoring protein–protein interactions from proximity labeling and affinity purification mass spectrometry datasets.  
@@ -103,10 +102,6 @@ The final output includes:
 - `predicted_probability`: Probability of each bait–prey interaction being real
 - `FDR`: Estimated false discovery rate
 - `global_cv_flag`: Flag for likely background preys based on variability across all samples
-
-## Tutorial
-
-[Read the full documentation](https://whisper.readthedocs.io/en/latest/)
 
 
 ## Citation
