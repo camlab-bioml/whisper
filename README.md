@@ -9,13 +9,15 @@ It uses interpretable features, programmatic weak supervision, and decoy-based f
 
 ---
 
-## Install from PyPI:
+## Installation
+
+### Install from PyPI
 
 ```bash
 pip install whisper-ppi
 ```
 
-## Install from GitHub:
+### Install from GitHub
 
 ```bash
 git clone https://github.com/camlab-bioml/whisper
