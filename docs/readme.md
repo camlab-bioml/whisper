@@ -8,7 +8,7 @@ It uses interpretable features, programmatic weak supervision, and decoy-based f
 
 ---
 ## Overview
-![WHISPER Overview](https://github.com/camlab-bioml/whisper/docs/overview_figure.png)
+![WHISPER Overview](overview_figure.png)
 
 ## Installation
 
