@@ -7,6 +7,9 @@
 It uses interpretable features, programmatic weak supervision, and decoy-based false discovery rate (FDR) estimation to identify high-confidence interactors.
 
 ---
+## Overview
+![WHISPER Overview](https://github.com/camlab-bioml/whisper/docs/overview_figure.png)
+
 ## Installation
 
 ### Install from PyPI
