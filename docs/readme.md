@@ -8,7 +8,7 @@ It uses interpretable features, programmatic weak supervision, and decoy-based f
 
 ---
 ## Overview
-![WHISPER Overview](https://github.com/vesalkasmaeifar/genbait/blob/main/overview_figure.png)
+![WHISPER Overview](https://github.com/vesalkasmaeifar/whisper/blob/main/overview_figure.png)
 
 ## Installation
 
