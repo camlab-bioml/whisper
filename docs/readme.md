@@ -7,6 +7,9 @@
 It uses interpretable features, programmatic weak supervision, and decoy-based false discovery rate (FDR) estimation to identify high-confidence interactors.
 
 ---
+## Overview
+![WHISPER Overview](https://github.com/vesalkasmaeifar/genbait/blob/main/overview_figure.png)
+
 ## Installation
 
 ### Install from PyPI
