@@ -26,7 +26,7 @@ def train_and_score_fragment(
 
     Expected columns in `features_df`:
       - Bait, Protein, Peptide, Fragment
-      - composite_score, global_cv (optional), single_rep_flag (optional)
+      - heuristic_score, global_cv (optional), single_rep_flag (optional)
       - Feature columns:
           ['log_fold_change','snr','mean_diff','median_diff',
            'replicate_fold_change_sd','bait_cv','bait_control_sd_ratio','zero_or_neg_fc']
@@ -56,7 +56,7 @@ def train_and_score_fragment(
 
     # ---------- Cluster baits to identify "strong" set ----------
     bait_top50_stds = {
-        b: df[df["Bait"] == b]["composite_score"].nlargest(50).std()
+        b: df[df["Bait"] == b]["heuristic_score"].nlargest(50).std()
         for b in df["Bait"].unique()
     }
     bait_names = np.array(list(bait_top50_stds.keys()))
@@ -83,13 +83,13 @@ def train_and_score_fragment(
         sub = df[df["Bait"] == bait].copy()
         n_pos = bait_pos_quota[bait]
         if n_pos > 0:
-            ranked = sub.sort_values("composite_score", ascending=False)
+            ranked = sub.sort_values("heuristic_score", ascending=False)
             elig = ranked[ranked.get("single_rep_flag", 0) != 1]  # exclude single-rep spikes if present
             pos_idx = elig.index[:n_pos]
             y.loc[pos_idx] = 1
 
             remaining = sub.drop(index=pos_idx, errors="ignore")
-            neg_idx = remaining["composite_score"].nsmallest(initial_negatives).index
+            neg_idx = remaining["heuristic_score"].nsmallest(initial_negatives).index
             y.loc[neg_idx] = -1
 
     labeled_idx = y[y != 0].index

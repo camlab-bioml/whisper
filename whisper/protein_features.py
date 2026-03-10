@@ -27,7 +27,7 @@ def feature_engineering_protein(intensity_df: pd.DataFrame, controls: list) -> p
         Aggregated feature table with one row per (Bait, Prey) containing:
         ['Bait','Prey','log_fold_change','snr','mean_diff','median_diff',
          'replicate_fold_change_sd','bait_cv','bait_control_sd_ratio','zero_or_neg_fc',
-         'nonzero_reps','reps_above_ctrl_med','single_rep_flag','composite_score','global_cv']
+         'nonzero_reps','reps_above_ctrl_med','single_rep_flag','heuristic_score','global_cv']
         The table is also written to 'features.csv'.
     """
 
@@ -148,13 +148,13 @@ def feature_engineering_protein(intensity_df: pd.DataFrame, controls: list) -> p
         )
 
         # composite score = mean of main signal features
-        bait_features_df['composite_score'] = scaled[['log_fold_change','snr','mean_diff','median_diff']].mean(axis=1)
+        bait_features_df['heuristic_score'] = scaled[['log_fold_change','snr','mean_diff','median_diff']].mean(axis=1)
 
         # map global CV (NaN if not computed—e.g., prey was bait/birA everywhere)
         bait_features_df['global_cv'] = bait_features_df['Prey'].map(global_cv_dict)
 
         # sort and collect
-        all_bait_features.append(bait_features_df.sort_values(by='composite_score', ascending=False))
+        all_bait_features.append(bait_features_df.sort_values(by='heuristic_score', ascending=False))
 
     aggregated_features_df = pd.concat(all_bait_features, ignore_index=True)
 

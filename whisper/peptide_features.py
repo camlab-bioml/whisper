@@ -122,7 +122,7 @@ def feature_engineering_peptide(intensity_df: pd.DataFrame, controls: list) -> p
             columns=scale_cols, index=bait_features.index,
         )
 
-        bait_features["composite_score"] = scaled_df[
+        bait_features["heuristic_score"] = scaled_df[
             ["log_fold_change", "snr", "mean_diff", "median_diff"]
         ].mean(axis=1)
 
@@ -130,7 +130,7 @@ def feature_engineering_peptide(intensity_df: pd.DataFrame, controls: list) -> p
             lambda r: global_cv.get((r["Protein"], r["Peptide"]), np.nan), axis=1
         )
 
-        all_bait_features.append(bait_features.sort_values("composite_score", ascending=False))
+        all_bait_features.append(bait_features.sort_values("heuristic_score", ascending=False))
 
     aggregated_features_df = pd.concat(all_bait_features, ignore_index=True)
     aggregated_features_df.to_csv("features_peptide.csv", index=False)

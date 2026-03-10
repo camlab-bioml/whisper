@@ -42,7 +42,7 @@ def train_and_score_protein(
 
     # === Hierarchical clustering of baits ===
     bait_top50_stds = {
-        bait: df_real[df_real['Bait'] == bait]['composite_score'].nlargest(50).std()
+        bait: df_real[df_real['Bait'] == bait]['heuristic_score'].nlargest(50).std()
         for bait in df_real['Bait'].unique()
     }
     bait_names  = np.array(list(bait_top50_stds.keys()))
@@ -78,13 +78,13 @@ def train_and_score_protein(
         N_pos = bait_scaled_positives[bait]
 
         if N_pos > 0:
-            ranked = bait_df.sort_values('composite_score', ascending=False)
+            ranked = bait_df.sort_values('heuristic_score', ascending=False)
             elig_pos = ranked[ranked['single_rep_flag'] != 1]
             top_pos = elig_pos.index[:N_pos]
             y_labels.loc[top_pos] = 1
 
             remaining = bait_df.drop(index=top_pos, errors='ignore')
-            bottom_neg = remaining['composite_score'].nsmallest(initial_negatives).index
+            bottom_neg = remaining['heuristic_score'].nsmallest(initial_negatives).index
             y_labels.loc[bottom_neg] = -1
 
     # === Train classifier ===
