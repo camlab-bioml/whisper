@@ -8,6 +8,7 @@
 It uses interpretable features, programmatic weak supervision, and decoy-based false discovery rate (FDR) estimation to identify high-confidence interactors.
 
 More details of the algorithm and benchmarking can be found in the manuscript _Scoring protein-protein interactions with weakly supervised learning (Kasmaeifar et al., 2026)_.
+
 ---
 
 ## Overview
