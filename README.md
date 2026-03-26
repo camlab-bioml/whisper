@@ -110,6 +110,7 @@ The final output includes:
 - `predicted_probability`: Probability of each bait–prey interaction being real
 - `FDR`: Estimated false discovery rate
 - `global_cv_flag`: Flag for likely background preys based on variability across all samples
+- And individual features values
 
 ## Tutorial
 
