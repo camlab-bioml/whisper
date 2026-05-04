@@ -2,7 +2,7 @@
 
 Welcome to the **whisper** documentation.
 
-![logo](logo.png)
+![logo](whisper_logo.png)
 
 
 ```{toctree}
