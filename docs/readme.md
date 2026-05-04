@@ -3,6 +3,9 @@
 [![PyPI](https://img.shields.io/pypi/v/whisper-ppi.svg?color=brightgreen)](https://pypi.org/project/whisper-ppi/)
 [![Python](https://img.shields.io/pypi/pyversions/whisper-ppi.svg)](https://pypi.org/project/whisper-ppi/)
 
+![logo](logo.png)
+
+
 `whisper-ppi` is a Python package for scoring protein–protein interactions from proximity labeling and affinity purification mass spectrometry datasets.  
 It uses interpretable features, programmatic weak supervision, and decoy-based false discovery rate (FDR) estimation to identify high-confidence interactors.
 
