@@ -102,7 +102,7 @@ Example rows from `whisper_protein_scores.csv`:
 
 ### Expected run time
 
-The full tutorial notebook runs in approximately **[5-10 minutes]** on a standard desktop computer (no GPU required).
+The full tutorial notebook runs in approximately 5-10 minutes on a standard desktop computer (no GPU required).
 
 ---
 
