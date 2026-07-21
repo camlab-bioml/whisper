@@ -32,6 +32,7 @@ pip install .
   - One column named `Protein`
   - Other columns representing bait replicate intensities, named as `BAIT_1`, `BAIT_2`, etc.
 - Control samples must be identifiable via substrings in their column names (e.g., `"EGFP"` or `"Empty"`).
+- Missing values should be replaced by zero imputation or other preferred approaches.
 
 ## Usage
 
