@@ -7,8 +7,16 @@ from sklearn.preprocessing import StandardScaler
 import warnings
 warnings.filterwarnings("ignore")
 
+# Labelling enzymes are part of the construct, not a finding. APEX2 is left out: it is a real human gene outside APEX experiments.
+LABELLING_ENZYMES = {
+    "bira", "bioid2", "turboid", "miniturbo", "nminiturbo",
+}
 
-def feature_engineering_fragment(intensity_df: pd.DataFrame, controls: list) -> pd.DataFrame:
+# Stand-ins for a missing protein name; '0' is what a gene mapping writes when no gene name exists.
+MISSING_IDENTIFIERS = {"", "0", "nan", "none"}
+
+
+def feature_engineering_fragment(intensity_df: pd.DataFrame, controls: list, labelling_enzyme=None) -> pd.DataFrame:
     """
     Compute fragment-level features.
     Mirrors protein/peptide feature engineering but operates on (Protein, Peptide, Fragment).
@@ -20,29 +28,69 @@ def feature_engineering_fragment(intensity_df: pd.DataFrame, controls: list) -> 
         ['Protein', 'Peptide', 'Fragment', <bait/replicate and control columns>]
     controls : list
         List of control identifiers (e.g., ["EGFP", "Empty", "NminiTurbo"])
+    labelling_enzyme : str, list or None, default=None
+        Name(s) of the labelling enzyme, flagged inert alongside the bait's
+        own protein. None uses the BioID defaults in LABELLING_ENZYMES; pass
+        "APEX2" for an APEX experiment, or an empty list where no enzyme is
+        quantified, as in affinity purification.
 
     Returns
     -------
     pd.DataFrame
-        Aggregated feature table per bait–(protein, peptide, fragment) with computed metrics.
+        Aggregated feature table per bait–(protein, peptide, fragment) with
+        computed metrics, including an `is_inert` column. Also written to
+        'features_fragment.csv'.
+
+    Notes
+    -----
+    Fragments of the bait's own protein and of the labelling enzyme are scored
+    like any other fragment but flagged `is_inert`: their enrichment is
+    guaranteed by the construct rather than by association. The control means
+    and SDs, the floors taken from them, and the per-bait scaler behind the
+    heuristic score are computed on the eligible rows alone, so their presence
+    moves no other pair's numbers.
     """
 
-    # --- Identify columns ---
+    intensity_df = intensity_df.copy()
     id_cols = ["Protein", "Peptide", "Fragment"]
+
+    # Rows with no protein identifier: unreportable, and they collide in the global-CV dictionary.
+    _unnamed = intensity_df["Protein"].isna() | (
+        intensity_df["Protein"].astype(str).str.strip().str.lower()
+        .isin(MISSING_IDENTIFIERS))
+    if _unnamed.any():
+        print(f"Dropping {int(_unnamed.sum())} row(s) with no protein identifier")
+        intensity_df = intensity_df.loc[~_unnamed].reset_index(drop=True)
+
+    # Repeated identifier keys duplicate pairs downstream; flagged rather than silently merged.
+    _dups = intensity_df.duplicated(subset=id_cols, keep=False)
+    if _dups.any():
+        n_keys = intensity_df.loc[_dups, id_cols].drop_duplicates().shape[0]
+        print(f"WARNING: {int(_dups.sum())} rows share {n_keys} duplicated "
+              f"(Protein, Peptide, Fragment) keys")
+
+    # --- Identify columns ---
     control_columns = [c for c in intensity_df.columns if any(ctrl in c for ctrl in controls)]
     sample_columns = [c for c in intensity_df.columns if c not in id_cols]
     bait_like_columns = [c for c in sample_columns if c not in control_columns]
     baits = sorted(list(set(col.split("_")[0] for col in bait_like_columns)))
-    intensity_columns = control_columns + [c for c in bait_like_columns if any(b in c for b in baits)]
+    intensity_columns = control_columns + bait_like_columns
 
-    # --- Global CV across ALL samples for each fragment (exclude BirA and bait proteins for map) ---
+    # --- Global CV across ALL samples, for every row ---
     global_cv = {}
     for _, row in intensity_df.iterrows():
-        prot = row["Protein"]
         vals = row[intensity_columns].astype(float).values
         mean_all = np.mean(vals)
         sd_all = np.std(vals)
         global_cv[(row["Protein"], row["Peptide"], row["Fragment"])] = sd_all / mean_all if mean_all > 0 else 0
+
+    # Enzyme names to treat as inert: the BioID defaults, or whatever labelling_enzyme names.
+    if labelling_enzyme is None:
+        _enzymes = set(LABELLING_ENZYMES)
+    elif isinstance(labelling_enzyme, str):
+        _enzymes = {labelling_enzyme.lower()}
+    else:
+        _enzymes = {e.lower() for e in labelling_enzyme}
 
     all_bait_features = []
 
@@ -52,10 +100,14 @@ def feature_engineering_fragment(intensity_df: pd.DataFrame, controls: list) -> 
             # skip baits without replicate columns that match the "<bait>_#" pattern
             continue
 
-        # Exclude the bait's own protein & BirA
-        filtered_df = intensity_df[~intensity_df["Protein"].isin([bait, "birA"])].copy()
+        # Inert rows: the bait's own protein and the enzyme, tested against protein-group members.
+        _inert_names = {bait.lower()} | _enzymes
+        _is_inert = intensity_df["Protein"].astype(str).map(
+            lambda p: any(m.strip().lower() in _inert_names for m in p.split(";")))
+        filtered_df = intensity_df[~_is_inert]
+        inert_df = intensity_df[_is_inert]
 
-        # --- Control summary stats ---
+        # --- Control summary stats, on the eligible rows alone ---
         ctrl_vals = filtered_df[control_columns].astype(float).values
         ctrl_means = np.mean(ctrl_vals, axis=1)
         ctrl_sds = np.std(ctrl_vals, axis=1)
@@ -64,7 +116,9 @@ def feature_engineering_fragment(intensity_df: pd.DataFrame, controls: list) -> 
         min_sd_ctrl = np.min(ctrl_sds[ctrl_sds > 0]) if np.any(ctrl_sds > 0) else 1.0
 
         features = []
-        for _, row in filtered_df.iterrows():
+        # Eligible rows first, then inert ones through identical code and control statistics.
+        for _source_df, _inert_flag in ((filtered_df, False), (inert_df, True)):
+          for _, row in _source_df.iterrows():
             prey_prot = row["Protein"]
             prey_pep = row["Peptide"]
             prey_frag = row["Fragment"]
@@ -112,6 +166,7 @@ def feature_engineering_fragment(intensity_df: pd.DataFrame, controls: list) -> 
                 "nonzero_reps": nonzero_reps,
                 "reps_above_ctrl_med": reps_above_ctrl_med,
                 "single_rep_flag": single_rep_flag,
+                "is_inert": _inert_flag,
             })
 
         bait_features = pd.DataFrame(features)
@@ -122,9 +177,12 @@ def feature_engineering_fragment(intensity_df: pd.DataFrame, controls: list) -> 
             "replicate_fold_change_sd", "bait_cv", "bait_control_sd_ratio",
             "zero_or_neg_fc",
         ]
+        # Fit on eligible rows only: an inert row would shift every other pair's z-score.
+        _eligible = ~bait_features["is_inert"].to_numpy()
         scaler = StandardScaler()
+        scaler.fit(bait_features.loc[_eligible, scale_cols])
         scaled_df = pd.DataFrame(
-            scaler.fit_transform(bait_features[scale_cols]),
+            scaler.transform(bait_features[scale_cols]),
             columns=scale_cols, index=bait_features.index,
         )
 

@@ -73,6 +73,7 @@ pip install .
   - Other columns representing bait replicate intensities, named as `BAIT_1`, `BAIT_2`, etc.
 - Control samples must be identifiable via substrings in their column names (e.g., `"EGFP"` or `"Empty"`).
 - Missing values should be replaced by zero imputation or other preferred approaches.
+- The bait's own protein and the labelling enzyme are scored but excluded from training, the decoy null and the FDR denominator.
 
 ---
 

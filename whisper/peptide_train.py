@@ -14,6 +14,8 @@ def train_and_score_peptide(
     features_df: pd.DataFrame,
     initial_positives: int = 15,
     initial_negatives: int = 200,
+    n_decoy_replicates: int = 30,
+    min_peptides_per_protein: int = 2,
     random_state: int = 42,
     save_dir: str = ".",
     peptide_out: str = "whisper_peptide_scores.csv",
@@ -31,6 +33,16 @@ def train_and_score_peptide(
           ['log_fold_change','snr','mean_diff','median_diff',
            'replicate_fold_change_sd','bait_cv','bait_control_sd_ratio','zero_or_neg_fc']
 
+    Parameters of note:
+      - n_decoy_replicates: independent feature permutations pooled into the
+        decoy null. One shuffle is a single Monte Carlo sample of that null and
+        is far too noisy at a stringent threshold; pooling N of them and
+        dividing the decoy count by N estimates the same quantity with roughly
+        1/sqrt(N) the noise.
+      - min_peptides_per_protein: proteins backed by fewer peptides than this
+        within a bait are dropped before training, since a protein seen once
+        carries no replicate evidence at this level.
+
     Saves:
       - <save_dir>/<peptide_out>: peptide-level scores with FDR
       - <save_dir>/<protein_out>: protein-level aggregation per bait
@@ -43,6 +55,22 @@ def train_and_score_peptide(
     # ----- Stable sort -----
     df = features_df.copy().sort_values(["Bait", "Protein", "Peptide"]).reset_index(drop=True)
 
+    # Proteins backed by too few peptides within a bait carry no evidence here.
+    if min_peptides_per_protein > 1:
+        _before = len(df)
+        df = (df.groupby(["Bait", "Protein"])
+                .filter(lambda g: len(g) >= min_peptides_per_protein)
+                .reset_index(drop=True))
+        if len(df) < _before:
+            print(f"Dropped {_before - len(df)} row(s) from proteins with "
+                  f"fewer than {min_peptides_per_protein} peptides per bait")
+
+    # Inert rows are scored at the end but shape nothing: not the clustering, labels, null or FDR denominator.
+    if "is_inert" not in df.columns:
+        print("WARNING: no is_inert column; treating every row as eligible")
+        df["is_inert"] = False
+    df_eligible = df[~df["is_inert"]]
+
     feature_columns = [
         "log_fold_change", "snr", "mean_diff", "median_diff",
         "replicate_fold_change_sd", "bait_cv", "bait_control_sd_ratio",
@@ -52,7 +80,7 @@ def train_and_score_peptide(
 
     # ----- Cluster baits to identify "strong" cluster (same logic as protein) -----
     bait_top50_stds = {
-        b: df[df["Bait"] == b]["heuristic_score"].nlargest(50).std()
+        b: df_eligible[df_eligible["Bait"] == b]["heuristic_score"].nlargest(50).std()
         for b in df["Bait"].unique()
     }
     bait_names = np.array(list(bait_top50_stds.keys()))
@@ -68,7 +96,8 @@ def train_and_score_peptide(
     cluster_means = {c: float(bait_scores[clusters == c].mean()) for c in np.unique(clusters)}
     max_size = max(cluster_sizes.values())
     cands = [c for c, n in cluster_sizes.items() if n == max_size]
-    strong_cluster_id = cands[0] if len(cands) == 1 else max(cands, key=lambda c: cluster_means[c])
+    # largest cluster; on a tie the LOWER mean std wins
+    strong_cluster_id = cands[0] if len(cands) == 1 else min(cands, key=lambda c: cluster_means[c])
     strong_baits = [b for b, c in zip(bait_names, clusters) if c == strong_cluster_id]
 
     # ----- Pseudo-labels -----
@@ -76,7 +105,7 @@ def train_and_score_peptide(
     bait_pos_quota = {b: (initial_positives if b in strong_baits else 0) for b in df["Bait"].unique()}
 
     for bait in df["Bait"].unique():
-        sub = df[df["Bait"] == bait].copy()
+        sub = df_eligible[df_eligible["Bait"] == bait].copy()
         n_pos = bait_pos_quota[bait]
         if n_pos > 0:
             ranked = sub.sort_values("heuristic_score", ascending=False)
@@ -103,25 +132,29 @@ def train_and_score_peptide(
 
     X_std = scaler.transform(X)
     df["predicted_probability"] = clf.predict_proba(X_std)[:, 1]
+    # Refresh the slice so it carries the probabilities just assigned.
+    df_eligible = df[~df["is_inert"]]
 
     # ----- Bait-specific decoy shuffles for FDR -----
     decoys = []
-    for i, bait in enumerate(df["Bait"].unique()):
-        rng_i = np.random.RandomState(random_state + i)
-        sub = df[df["Bait"] == bait].copy()
-        dec = sub[feature_columns].apply(lambda col: rng_i.permutation(col.values))
-        X_dec = scaler.transform(dec.values)
-        decoys.append(clf.predict_proba(X_dec)[:, 1])
+    for rep_i in range(n_decoy_replicates):
+        for i, bait in enumerate(df_eligible["Bait"].unique()):
+            rng_i = np.random.RandomState(random_state + rep_i * 1000 + i)
+            sub = df_eligible[df_eligible["Bait"] == bait].copy()
+            dec = sub[feature_columns].apply(lambda col: rng_i.permutation(col.values))
+            X_dec = scaler.transform(dec.values)
+            decoys.append(clf.predict_proba(X_dec)[:, 1])
     decoy_probs = np.concatenate(decoys) if len(decoys) else np.array([])
 
-    real_probs = df["predicted_probability"].values
+    real_probs = df_eligible["predicted_probability"].values
     unique_p = np.unique(real_probs)
 
     # raw FDR
     raw_fdr = {}
     for p in unique_p:
         n_real = np.sum(real_probs >= p)
-        n_dec = np.sum(decoy_probs >= p) if decoy_probs.size else 0
+        # Divided by the replicate count to put pooled decoys back on a per-dataset scale.
+        n_dec = (np.sum(decoy_probs >= p) / n_decoy_replicates) if decoy_probs.size else 0
         raw_fdr[p] = min(n_dec / n_real if n_real > 0 else 1.0, 1.0)
 
     # monotonic FDR (non-increasing with probability)
@@ -132,7 +165,13 @@ def train_and_score_peptide(
         prev = sorted_p[i - 1]
         mono_fdr[p] = min(raw_fdr[p], mono_fdr[prev])
 
-    df["FDR"] = df["predicted_probability"].map(mono_fdr)
+    # Keyed on eligible probabilities, so an inert row reads the nearest q at or below its score.
+    _fdr_keys = np.array(sorted(mono_fdr))
+    _fdr_vals = np.array([mono_fdr[k] for k in _fdr_keys])
+    _pos = np.clip(np.searchsorted(_fdr_keys,
+                                   df["predicted_probability"].values,
+                                   side="right") - 1, 0, len(_fdr_keys) - 1)
+    df["FDR"] = _fdr_vals[_pos]
 
     # ----- Background flag by global CV (optional) -----
     if "global_cv" in df.columns:
@@ -144,7 +183,6 @@ def train_and_score_peptide(
         df["global_cv_flag"] = ""
 
     # ===== AGGREGATE TO PROTEIN-LEVEL (per bait) =====
-    # Choose aggregation for probabilities
     prob_agg = "max" if aggregate_strategy.lower() == "max" else "mean"
 
     grp = df.groupby(["Bait", "Protein"])
