@@ -45,7 +45,8 @@ def train_and_score_peptide(
 
     Saves:
       - <save_dir>/<peptide_out>: peptide-level scores with FDR
-      - <save_dir>/<protein_out>: protein-level aggregation per bait
+      - <save_dir>/<protein_out>: protein-level aggregation per bait, with an
+        FDR estimated at the protein level from real and decoy peptides
 
     Returns:
       (peptide_df, protein_df)
@@ -137,13 +138,19 @@ def train_and_score_peptide(
 
     # ----- Bait-specific decoy shuffles for FDR -----
     decoys = []
+    decoy_rows = []   # kept with their protein, for the protein-level FDR below
     for rep_i in range(n_decoy_replicates):
         for i, bait in enumerate(df_eligible["Bait"].unique()):
             rng_i = np.random.RandomState(random_state + rep_i * 1000 + i)
             sub = df_eligible[df_eligible["Bait"] == bait].copy()
             dec = sub[feature_columns].apply(lambda col: rng_i.permutation(col.values))
             X_dec = scaler.transform(dec.values)
-            decoys.append(clf.predict_proba(X_dec)[:, 1])
+            p_dec = clf.predict_proba(X_dec)[:, 1]
+            decoys.append(p_dec)
+            decoy_rows.append(pd.DataFrame({
+                "rep": rep_i, "Bait": bait, "Protein": sub["Protein"].values,
+                "predicted_probability": p_dec,
+            }))
     decoy_probs = np.concatenate(decoys) if len(decoys) else np.array([])
 
     real_probs = df_eligible["predicted_probability"].values
@@ -188,11 +195,37 @@ def train_and_score_peptide(
     grp = df.groupby(["Bait", "Protein"])
     protein_df = grp.agg(
         predicted_probability=("predicted_probability", prob_agg),
-        FDR=("FDR", "min"),
         n_peptides=("Peptide", "count"),
         n_background=("global_cv_flag", lambda x: (x == "likely background").sum()),
         mean_cv=("global_cv", "mean"),
     ).reset_index()
+
+    # Protein-level FDR. Taking the minimum peptide FDR per protein is
+    # anti-conservative: a protein with many peptides gets many chances to reach
+    # a low FDR. Instead the same aggregation is applied to real and decoy
+    # peptides (decoys per shuffle replicate), and the FDR is estimated from
+    # the protein-level scores with the same target-decoy ratio as above.
+    real_prot = (df_eligible.groupby(["Bait", "Protein"])["predicted_probability"]
+                 .agg(prob_agg).values)
+    if decoy_rows:
+        decoy_prot = (pd.concat(decoy_rows, ignore_index=True)
+                      .groupby(["rep", "Bait", "Protein"])["predicted_probability"]
+                      .agg(prob_agg).values)
+    else:
+        decoy_prot = np.array([])
+    prot_cut = np.unique(real_prot)
+    prot_fdr = np.empty(len(prot_cut))
+    for k, p in enumerate(prot_cut):
+        n_real = np.sum(real_prot >= p)
+        n_dec = np.sum(decoy_prot >= p) / n_decoy_replicates
+        prot_fdr[k] = min(n_dec / n_real if n_real > 0 else 1.0, 1.0)
+    prot_fdr = np.minimum.accumulate(prot_fdr)   # non-increasing with probability
+    # Inert proteins read the q at or below their score, as at the peptide level.
+    _pos = np.clip(np.searchsorted(prot_cut,
+                                   protein_df["predicted_probability"].values,
+                                   side="right") - 1, 0, len(prot_cut) - 1)
+    protein_df.insert(protein_df.columns.get_loc("predicted_probability") + 1,
+                      "FDR", prot_fdr[_pos])
 
     # Protein-level background flag (≥50% peptides flagged)
     protein_df["background_flag_protein"] = np.where(
