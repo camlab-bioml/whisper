@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/whisper-ppi.svg)](https://pypi.org/project/whisper-ppi/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-![logo](https://github.com/camlab-bioml/whisper/blob/main/logo.png)
+![logo](https://raw.githubusercontent.com/camlab-bioml/whisper/main/logo.png)
 
 `whisper-ppi` is a Python package for scoring protein–protein interactions from proximity labeling and affinity purification mass spectrometry datasets.  
 It uses interpretable features, programmatic weak supervision, and decoy-based false discovery rate (FDR) estimation to identify high-confidence interactors.
@@ -15,7 +15,7 @@ More details of the algorithm and benchmarking can be found in the manuscript _P
 ---
 
 ## Overview
-![WHISPER Overview](https://github.com/camlab-bioml/whisper/blob/main/overview_figure.png)
+![WHISPER Overview](https://raw.githubusercontent.com/camlab-bioml/whisper/main/overview_figure.png)
 
 ---
 

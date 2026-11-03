@@ -1,5 +1,7 @@
 # whisper/protein_train.py
 
+import os
+
 import pandas as pd
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier, BaggingClassifier
@@ -11,6 +13,8 @@ def train_and_score_protein(
     initial_positives: int = 15,
     initial_negatives: int = 200,
     n_decoy_replicates: int = 30,
+    save_dir: str = ".",
+    protein_out: str = "whisper_protein_scores.csv",
 ) -> pd.DataFrame:
     """
     Train a model at the protein level using hierarchical bait clustering,
@@ -30,6 +34,10 @@ def train_and_score_protein(
         noisy at a stringent threshold; pooling N of them and dividing the
         decoy count by N estimates the same quantity with roughly 1/sqrt(N)
         the noise. This changes precision, not the definition of the null.
+    save_dir : str, default="."
+        Folder the scored table is written to (created if missing).
+    protein_out : str, default="whisper_protein_scores.csv"
+        File name of the scored table.
 
     Returns
     -------
@@ -164,5 +172,6 @@ def train_and_score_protein(
         df_real["global_cv_flag"] = ""
 
     # === Save ===
-    df_real.to_csv("whisper_protein_scores.csv", index=False)
+    os.makedirs(save_dir, exist_ok=True)
+    df_real.to_csv(os.path.join(save_dir, protein_out), index=False)
     return df_real

@@ -1,4 +1,4 @@
-# whsiper/fragment_train.py
+# whisper/fragment_train.py
 
 import os
 import pandas as pd
@@ -49,7 +49,7 @@ def train_and_score_fragment(
         FDR estimated at the protein level from real and decoy fragments
 
     Returns:
-      (fragment_df, protein_df)
+      protein_df (the fragment-level table is saved to <save_dir>/<fragment_out>)
     """
     rng = np.random.RandomState(random_state)
 
@@ -237,6 +237,12 @@ def train_and_score_fragment(
     )
 
     # ----- Save both -----
+    # Same names and leading columns as the protein-level output.
+    protein_df = protein_df.rename(columns={"Protein": "Prey",
+                                            "background_flag_protein": "global_cv_flag"})
+    protein_df = protein_df[["Bait", "Prey", "predicted_probability", "FDR",
+                             "global_cv_flag", "n_fragments", "n_background", "mean_cv"]]
+
     os.makedirs(save_dir, exist_ok=True)
     fragment_path = os.path.join(save_dir, fragment_out)
     protein_path = os.path.join(save_dir, protein_out)

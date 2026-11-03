@@ -49,7 +49,7 @@ def train_and_score_peptide(
         FDR estimated at the protein level from real and decoy peptides
 
     Returns:
-      (peptide_df, protein_df)
+      protein_df (the peptide-level table is saved to <save_dir>/<peptide_out>)
     """
     rng = np.random.RandomState(random_state)
 
@@ -235,6 +235,12 @@ def train_and_score_peptide(
     )
 
     # ----- Save both -----
+    # Same names and leading columns as the protein-level output.
+    protein_df = protein_df.rename(columns={"Protein": "Prey",
+                                            "background_flag_protein": "global_cv_flag"})
+    protein_df = protein_df[["Bait", "Prey", "predicted_probability", "FDR",
+                             "global_cv_flag", "n_peptides", "n_background", "mean_cv"]]
+
     os.makedirs(save_dir, exist_ok=True)
     peptide_path = os.path.join(save_dir, peptide_out)
     protein_path = os.path.join(save_dir, protein_out)
