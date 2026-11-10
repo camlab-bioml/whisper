@@ -160,6 +160,8 @@ features_df = feature_engineering_fragment(intensity_df, controls)
 scored_df = train_and_score_fragment(features_df, initial_positives=15, initial_negatives=200)
 ```
 
+**Choosing the number of initial positives.** We recommend trying several values of `initial_positives` and comparing the results. As a starting point, use a lower number such as 5 for AP-MS data and 10 to 15 for BioID data. For large BioID datasets with more than 10 baits, even 3 positives per bait is enough.
+
 ### Reproducing manuscript results
 
 To reproduce all quantitative results from the manuscript, apply `whisper-ppi` to the datasets described in the Methods section using the parameters reported therein. The tutorial notebook demonstrates the standard workflow on a representative example dataset.
