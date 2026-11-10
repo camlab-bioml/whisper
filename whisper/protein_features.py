@@ -7,7 +7,6 @@ from sklearn.preprocessing import StandardScaler
 import warnings
 warnings.filterwarnings('ignore')
 
-# Labelling enzymes are part of the construct, not a finding. APEX2 is left out: it is a real human gene outside APEX experiments.
 LABELLING_ENZYMES = {
     'bira', 'bioid2', 'turboid', 'miniturbo', 'nminiturbo',
 }
@@ -45,21 +44,10 @@ def feature_engineering_protein(intensity_df: pd.DataFrame, controls: list, labe
          'heuristic_score','global_cv']
         The table is also written to 'features.csv'.
 
-    Notes
-    -----
-    The bait's own protein and the labelling enzyme are scored like any other
-    prey but flagged `is_inert`: their enrichment is guaranteed by the
-    construct rather than by association. Every statistic here -- the control
-    means and SDs, the floors taken from them, and the per-bait scaler behind
-    the heuristic score -- is computed on the eligible rows alone, so their
-    presence moves no other pair's numbers. `train_and_score_protein` keeps
-    them out of the bait clustering, the weak labels, the decoy null and the
-    FDR denominator.
     """
 
     intensity_df = intensity_df.copy()
 
-    # Rows with no protein identifier: unreportable, and they collide in the global-CV dictionary.
     _unnamed = intensity_df['Protein'].isna() | (
         intensity_df['Protein'].astype(str).str.strip().str.lower()
         .isin(MISSING_IDENTIFIERS))
@@ -67,7 +55,6 @@ def feature_engineering_protein(intensity_df: pd.DataFrame, controls: list, labe
         print(f"Dropping {int(_unnamed.sum())} row(s) with no protein identifier")
         intensity_df = intensity_df.loc[~_unnamed].reset_index(drop=True)
 
-    # Repeated identifier keys duplicate pairs downstream; flagged rather than silently merged.
     _dups = intensity_df['Protein'].duplicated(keep=False)
     if _dups.any():
         print(f"WARNING: {int(_dups.sum())} rows share "
@@ -96,7 +83,6 @@ def feature_engineering_protein(intensity_df: pd.DataFrame, controls: list, labe
         sd_all = np.std(vals)
         global_cv_dict[prey] = sd_all / mean_all if mean_all > 0 else 0.0
 
-    # Enzyme names to treat as inert: the BioID defaults, or whatever labelling_enzyme names.
     if labelling_enzyme is None:
         _enzymes = set(LABELLING_ENZYMES)
     elif isinstance(labelling_enzyme, str):
@@ -110,7 +96,6 @@ def feature_engineering_protein(intensity_df: pd.DataFrame, controls: list, labe
         # replicate columns for this bait (match strictly '<BAIT>_<rep>')
         bait_columns = [col for col in intensity_df.columns if re.fullmatch(fr'{bait}_[0-9]+', col)]
 
-        # Inert rows: the bait's own protein and the enzyme, tested against protein-group members.
         _inert_names = {bait.lower()} | _enzymes
         _is_inert = intensity_df['Protein'].astype(str).map(
             lambda p: any(m.strip().lower() in _inert_names for m in p.split(';')))
@@ -122,7 +107,6 @@ def feature_engineering_protein(intensity_df: pd.DataFrame, controls: list, labe
         control_means = np.mean(control_matrix, axis=1)
         control_sds   = np.std(control_matrix, axis=1)
 
-        # small positive fallbacks for zeros
         nonzero_mean_controls = control_means[control_means > 0]
         nonzero_sd_controls   = control_sds[control_sds > 0]
         min_mean_control = nonzero_mean_controls.min() if len(nonzero_mean_controls) > 0 else 1.0
@@ -130,7 +114,6 @@ def feature_engineering_protein(intensity_df: pd.DataFrame, controls: list, labe
 
         features = []
 
-        # Eligible rows first, then inert ones through identical code and control statistics.
         for _source_df, _inert_flag in ((filtered_df, False), (inert_df, True)):
           for idx, row in _source_df.iterrows():
             prey = row['Protein']
@@ -189,13 +172,11 @@ def feature_engineering_protein(intensity_df: pd.DataFrame, controls: list, labe
 
         bait_features_df = pd.DataFrame(features)
 
-        # scale per bait for stability
         scale_cols = [
             'log_fold_change', 'snr', 'mean_diff', 'median_diff',
             'replicate_fold_change_sd', 'bait_cv', 'bait_control_sd_ratio',
             'zero_or_neg_fc'
         ]
-        # Fit on eligible rows only: an inert row would shift every other pair's z-score.
         _eligible = ~bait_features_df['is_inert'].to_numpy()
         scaler = StandardScaler()
         scaler.fit(bait_features_df.loc[_eligible, scale_cols])
@@ -207,15 +188,12 @@ def feature_engineering_protein(intensity_df: pd.DataFrame, controls: list, labe
         # heuristic score = mean of main signal features
         bait_features_df['heuristic_score'] = scaled[['log_fold_change','snr','mean_diff','median_diff']].mean(axis=1)
 
-        # map global CV
         bait_features_df['global_cv'] = bait_features_df['Prey'].map(global_cv_dict)
 
-        # sort and collect
         all_bait_features.append(bait_features_df.sort_values(by='heuristic_score', ascending=False))
 
     aggregated_features_df = pd.concat(all_bait_features, ignore_index=True)
 
-    # write (kept for backward compatibility)
     aggregated_features_df.to_csv('features.csv', index=False)
 
     return aggregated_features_df

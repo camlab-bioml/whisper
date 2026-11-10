@@ -48,7 +48,6 @@ def train_and_score_protein(
     df_real = features_df.copy().sort_values(["Bait", "Prey"]).reset_index(drop=True)
     np.random.seed(42)
 
-    # Inert rows are scored at the end but shape nothing: not the clustering, labels, null or FDR denominator.
     if "is_inert" not in df_real.columns:
         print("WARNING: no is_inert column; treating every row as eligible")
         df_real["is_inert"] = False
@@ -122,7 +121,6 @@ def train_and_score_protein(
 
     X_scaled = scaler.transform(X_real)
     df_real["predicted_probability"] = bag_rf.predict_proba(X_scaled)[:, 1]
-    # Refresh the slice so it carries the probabilities just assigned.
     df_eligible = df_real[~df_real["is_inert"]]
 
     # === Decoy-based FDR estimation ===
@@ -143,7 +141,6 @@ def train_and_score_protein(
     raw_fdr = {}
     for p in unique_probs:
         n_real = (df_eligible["predicted_probability"] >= p).sum()
-        # Divided by the replicate count to put pooled decoys back on a per-dataset scale.
         n_decoy = (all_decoy_probs >= p).sum() / n_decoy_replicates
         raw_fdr[p] = min(n_decoy / n_real if n_real > 0 else 1.0, 1.0)
 
@@ -154,7 +151,6 @@ def train_and_score_protein(
         prev = sorted_probs[i - 1]
         fdr_map[curr] = min(raw_fdr[curr], fdr_map[prev])
 
-    # Keyed on eligible probabilities, so an inert row reads the nearest q at or below its score.
     _fdr_keys = np.array(sorted(fdr_map))
     _fdr_vals = np.array([fdr_map[k] for k in _fdr_keys])
     _pos = np.clip(np.searchsorted(_fdr_keys,

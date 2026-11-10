@@ -2,7 +2,7 @@ from importlib.metadata import PackageNotFoundError, version as _version
 
 try:
     __version__ = _version("whisper-ppi")
-except PackageNotFoundError:   # running from a source checkout that is not installed
+except PackageNotFoundError:   
     __version__ = "unknown"
 
 from .protein_features import feature_engineering_protein as feature_engineering_protein

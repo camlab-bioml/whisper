@@ -41,20 +41,12 @@ def feature_engineering_fragment(intensity_df: pd.DataFrame, controls: list, lab
         computed metrics, including an `is_inert` column. Also written to
         'features_fragment.csv'.
 
-    Notes
-    -----
-    Fragments of the bait's own protein and of the labelling enzyme are scored
-    like any other fragment but flagged `is_inert`: their enrichment is
-    guaranteed by the construct rather than by association. The control means
-    and SDs, the floors taken from them, and the per-bait scaler behind the
-    heuristic score are computed on the eligible rows alone, so their presence
-    moves no other pair's numbers.
+
     """
 
     intensity_df = intensity_df.copy()
     id_cols = ["Protein", "Peptide", "Fragment"]
 
-    # Rows with no protein identifier: unreportable, and they collide in the global-CV dictionary.
     _unnamed = intensity_df["Protein"].isna() | (
         intensity_df["Protein"].astype(str).str.strip().str.lower()
         .isin(MISSING_IDENTIFIERS))
@@ -116,7 +108,6 @@ def feature_engineering_fragment(intensity_df: pd.DataFrame, controls: list, lab
         min_sd_ctrl = np.min(ctrl_sds[ctrl_sds > 0]) if np.any(ctrl_sds > 0) else 1.0
 
         features = []
-        # Eligible rows first, then inert ones through identical code and control statistics.
         for _source_df, _inert_flag in ((filtered_df, False), (inert_df, True)):
           for _, row in _source_df.iterrows():
             prey_prot = row["Protein"]
@@ -177,7 +168,6 @@ def feature_engineering_fragment(intensity_df: pd.DataFrame, controls: list, lab
             "replicate_fold_change_sd", "bait_cv", "bait_control_sd_ratio",
             "zero_or_neg_fc",
         ]
-        # Fit on eligible rows only: an inert row would shift every other pair's z-score.
         _eligible = ~bait_features["is_inert"].to_numpy()
         scaler = StandardScaler()
         scaler.fit(bait_features.loc[_eligible, scale_cols])

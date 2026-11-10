@@ -20,7 +20,7 @@ def train_and_score_fragment(
     save_dir: str = ".",
     fragment_out: str = "whisper_fragment_scores.csv",
     protein_out: str = "whisper_protein_scores_from_fragments.csv",
-    aggregate_strategy: str = "max",   # "max" or "mean" for fragment->protein prob aggregation
+    aggregate_strategy: str = "max",   
 ):
     """
     Train a model on FRAGMENT-level features, compute bait-specific decoy FDR,
@@ -53,7 +53,6 @@ def train_and_score_fragment(
     """
     rng = np.random.RandomState(random_state)
 
-    # Stable order
     df = (
         features_df.copy()
         .sort_values(["Bait", "Protein", "Peptide", "Fragment"])
@@ -136,7 +135,6 @@ def train_and_score_fragment(
 
     X_std = scaler.transform(X)
     df["predicted_probability"] = clf.predict_proba(X_std)[:, 1]
-    # Refresh the slice so it carries the probabilities just assigned.
     df_eligible = df[~df["is_inert"]]
 
     # ---------- Bait-specific decoy shuffles for FDR ----------
@@ -163,7 +161,6 @@ def train_and_score_fragment(
     raw_fdr = {}
     for p in unique_p:
         n_real = np.sum(real_probs >= p)
-        # Divided by the replicate count to put pooled decoys back on a per-dataset scale.
         n_dec = (np.sum(decoy_probs >= p) / n_decoy_replicates) if decoy_probs.size else 0
         raw_fdr[p] = min(n_dec / n_real if n_real > 0 else 1.0, 1.0)
 
@@ -175,7 +172,6 @@ def train_and_score_fragment(
         prev = sorted_p[i - 1]
         mono_fdr[p] = min(raw_fdr[p], mono_fdr[prev])
 
-    # Keyed on eligible probabilities, so an inert row reads the nearest q at or below its score.
     _fdr_keys = np.array(sorted(mono_fdr))
     _fdr_vals = np.array([mono_fdr[k] for k in _fdr_keys])
     _pos = np.clip(np.searchsorted(_fdr_keys,
@@ -203,11 +199,7 @@ def train_and_score_fragment(
         mean_cv=("global_cv", "mean"),
     ).reset_index()
 
-    # Protein-level FDR. Taking the minimum fragment FDR per protein is
-    # anti-conservative: a protein with many fragments gets many chances to reach
-    # a low FDR. Instead the same aggregation is applied to real and decoy
-    # fragments (decoys per shuffle replicate), and the FDR is estimated from
-    # the protein-level scores with the same target-decoy ratio as above.
+
     real_prot = (df_eligible.groupby(["Bait", "Protein"])["predicted_probability"]
                  .agg(prob_agg).values)
     if decoy_rows:
@@ -223,7 +215,6 @@ def train_and_score_fragment(
         n_dec = np.sum(decoy_prot >= p) / n_decoy_replicates
         prot_fdr[k] = min(n_dec / n_real if n_real > 0 else 1.0, 1.0)
     prot_fdr = np.minimum.accumulate(prot_fdr)   # non-increasing with probability
-    # Inert proteins read the q at or below their score, as at the fragment level.
     _pos = np.clip(np.searchsorted(prot_cut,
                                    protein_df["predicted_probability"].values,
                                    side="right") - 1, 0, len(prot_cut) - 1)
@@ -237,7 +228,6 @@ def train_and_score_fragment(
     )
 
     # ----- Save both -----
-    # Same names and leading columns as the protein-level output.
     protein_df = protein_df.rename(columns={"Protein": "Prey",
                                             "background_flag_protein": "global_cv_flag"})
     protein_df = protein_df[["Bait", "Prey", "predicted_probability", "FDR",

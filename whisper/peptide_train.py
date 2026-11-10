@@ -53,10 +53,8 @@ def train_and_score_peptide(
     """
     rng = np.random.RandomState(random_state)
 
-    # ----- Stable sort -----
     df = features_df.copy().sort_values(["Bait", "Protein", "Peptide"]).reset_index(drop=True)
 
-    # Proteins backed by too few peptides within a bait carry no evidence here.
     if min_peptides_per_protein > 1:
         _before = len(df)
         df = (df.groupby(["Bait", "Protein"])
@@ -66,7 +64,6 @@ def train_and_score_peptide(
             print(f"Dropped {_before - len(df)} row(s) from proteins with "
                   f"fewer than {min_peptides_per_protein} peptides per bait")
 
-    # Inert rows are scored at the end but shape nothing: not the clustering, labels, null or FDR denominator.
     if "is_inert" not in df.columns:
         print("WARNING: no is_inert column; treating every row as eligible")
         df["is_inert"] = False
@@ -79,7 +76,6 @@ def train_and_score_peptide(
     ]
     X = df[feature_columns].values
 
-    # ----- Cluster baits to identify "strong" cluster (same logic as protein) -----
     bait_top50_stds = {
         b: df_eligible[df_eligible["Bait"] == b]["heuristic_score"].nlargest(50).std()
         for b in df["Bait"].unique()
@@ -133,12 +129,11 @@ def train_and_score_peptide(
 
     X_std = scaler.transform(X)
     df["predicted_probability"] = clf.predict_proba(X_std)[:, 1]
-    # Refresh the slice so it carries the probabilities just assigned.
     df_eligible = df[~df["is_inert"]]
 
     # ----- Bait-specific decoy shuffles for FDR -----
     decoys = []
-    decoy_rows = []   # kept with their protein, for the protein-level FDR below
+    decoy_rows = []   
     for rep_i in range(n_decoy_replicates):
         for i, bait in enumerate(df_eligible["Bait"].unique()):
             rng_i = np.random.RandomState(random_state + rep_i * 1000 + i)
@@ -160,7 +155,6 @@ def train_and_score_peptide(
     raw_fdr = {}
     for p in unique_p:
         n_real = np.sum(real_probs >= p)
-        # Divided by the replicate count to put pooled decoys back on a per-dataset scale.
         n_dec = (np.sum(decoy_probs >= p) / n_decoy_replicates) if decoy_probs.size else 0
         raw_fdr[p] = min(n_dec / n_real if n_real > 0 else 1.0, 1.0)
 
@@ -172,7 +166,6 @@ def train_and_score_peptide(
         prev = sorted_p[i - 1]
         mono_fdr[p] = min(raw_fdr[p], mono_fdr[prev])
 
-    # Keyed on eligible probabilities, so an inert row reads the nearest q at or below its score.
     _fdr_keys = np.array(sorted(mono_fdr))
     _fdr_vals = np.array([mono_fdr[k] for k in _fdr_keys])
     _pos = np.clip(np.searchsorted(_fdr_keys,
@@ -200,11 +193,7 @@ def train_and_score_peptide(
         mean_cv=("global_cv", "mean"),
     ).reset_index()
 
-    # Protein-level FDR. Taking the minimum peptide FDR per protein is
-    # anti-conservative: a protein with many peptides gets many chances to reach
-    # a low FDR. Instead the same aggregation is applied to real and decoy
-    # peptides (decoys per shuffle replicate), and the FDR is estimated from
-    # the protein-level scores with the same target-decoy ratio as above.
+
     real_prot = (df_eligible.groupby(["Bait", "Protein"])["predicted_probability"]
                  .agg(prob_agg).values)
     if decoy_rows:
@@ -220,14 +209,12 @@ def train_and_score_peptide(
         n_dec = np.sum(decoy_prot >= p) / n_decoy_replicates
         prot_fdr[k] = min(n_dec / n_real if n_real > 0 else 1.0, 1.0)
     prot_fdr = np.minimum.accumulate(prot_fdr)   # non-increasing with probability
-    # Inert proteins read the q at or below their score, as at the peptide level.
     _pos = np.clip(np.searchsorted(prot_cut,
                                    protein_df["predicted_probability"].values,
                                    side="right") - 1, 0, len(prot_cut) - 1)
     protein_df.insert(protein_df.columns.get_loc("predicted_probability") + 1,
                       "FDR", prot_fdr[_pos])
 
-    # Protein-level background flag (≥50% peptides flagged)
     protein_df["background_flag_protein"] = np.where(
         protein_df["n_background"] >= 0.5 * protein_df["n_peptides"],
         "likely background",
@@ -235,7 +222,6 @@ def train_and_score_peptide(
     )
 
     # ----- Save both -----
-    # Same names and leading columns as the protein-level output.
     protein_df = protein_df.rename(columns={"Protein": "Prey",
                                             "background_flag_protein": "global_cv_flag"})
     protein_df = protein_df[["Bait", "Prey", "predicted_probability", "FDR",

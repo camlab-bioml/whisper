@@ -7,7 +7,6 @@ from sklearn.preprocessing import StandardScaler
 import warnings
 warnings.filterwarnings("ignore")
 
-# Labelling enzymes are part of the construct, not a finding. APEX2 is left out: it is a real human gene outside APEX experiments.
 LABELLING_ENZYMES = {
     "bira", "bioid2", "turboid", "miniturbo", "nminiturbo",
 }
@@ -41,19 +40,10 @@ def feature_engineering_peptide(intensity_df: pd.DataFrame, controls: list, labe
         Aggregated feature table per bait–peptide pair with computed metrics,
         including an `is_inert` column. Also written to 'features_peptide.csv'.
 
-    Notes
-    -----
-    Peptides of the bait's own protein and of the labelling enzyme are scored
-    like any other peptide but flagged `is_inert`: their enrichment is
-    guaranteed by the construct rather than by association. The control means
-    and SDs, the floors taken from them, and the per-bait scaler behind the
-    heuristic score are computed on the eligible rows alone, so their presence
-    moves no other pair's numbers.
     """
 
     intensity_df = intensity_df.copy()
 
-    # Rows with no protein identifier: unreportable, and they collide in the global-CV dictionary.
     _unnamed = intensity_df["Protein"].isna() | (
         intensity_df["Protein"].astype(str).str.strip().str.lower()
         .isin(MISSING_IDENTIFIERS))
@@ -61,7 +51,6 @@ def feature_engineering_peptide(intensity_df: pd.DataFrame, controls: list, labe
         print(f"Dropping {int(_unnamed.sum())} row(s) with no protein identifier")
         intensity_df = intensity_df.loc[~_unnamed].reset_index(drop=True)
 
-    # Repeated identifier keys duplicate pairs downstream; flagged rather than silently merged.
     _dups = intensity_df.duplicated(subset=["Protein", "Peptide"], keep=False)
     if _dups.any():
         n_keys = intensity_df.loc[_dups, ["Protein", "Peptide"]].drop_duplicates().shape[0]
@@ -82,7 +71,6 @@ def feature_engineering_peptide(intensity_df: pd.DataFrame, controls: list, labe
         sd_all = np.std(vals)
         global_cv[(row["Protein"], row["Peptide"])] = sd_all / mean_all if mean_all > 0 else 0
 
-    # Enzyme names to treat as inert: the BioID defaults, or whatever labelling_enzyme names.
     if labelling_enzyme is None:
         _enzymes = set(LABELLING_ENZYMES)
     elif isinstance(labelling_enzyme, str):
@@ -95,14 +83,12 @@ def feature_engineering_peptide(intensity_df: pd.DataFrame, controls: list, labe
     for bait in baits:
         bait_columns = [c for c in intensity_df.columns if re.fullmatch(fr"{bait}_\d+", c)]
 
-        # Inert rows: the bait's own protein and the enzyme, tested against protein-group members.
         _inert_names = {bait.lower()} | _enzymes
         _is_inert = intensity_df["Protein"].astype(str).map(
             lambda p: any(m.strip().lower() in _inert_names for m in p.split(";")))
         filtered_df = intensity_df[~_is_inert]
         inert_df = intensity_df[_is_inert]
 
-        # --- Control summary stats, on the eligible rows alone ---
         ctrl_vals = filtered_df[control_columns].astype(float).values
         ctrl_means = np.mean(ctrl_vals, axis=1)
         ctrl_sds = np.std(ctrl_vals, axis=1)
@@ -111,7 +97,6 @@ def feature_engineering_peptide(intensity_df: pd.DataFrame, controls: list, labe
         min_sd_ctrl = np.min(ctrl_sds[ctrl_sds > 0]) if np.any(ctrl_sds > 0) else 1.0
 
         features = []
-        # Eligible rows first, then inert ones through identical code and control statistics.
         for _source_df, _inert_flag in ((filtered_df, False), (inert_df, True)):
           for _, row in _source_df.iterrows():
             prey = row["Protein"]
@@ -170,7 +155,6 @@ def feature_engineering_peptide(intensity_df: pd.DataFrame, controls: list, labe
             "replicate_fold_change_sd", "bait_cv", "bait_control_sd_ratio",
             "zero_or_neg_fc",
         ]
-        # Fit on eligible rows only: an inert row would shift every other pair's z-score.
         _eligible = ~bait_features["is_inert"].to_numpy()
         scaler = StandardScaler()
         scaler.fit(bait_features.loc[_eligible, scale_cols])
